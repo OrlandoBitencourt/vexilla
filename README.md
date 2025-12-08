@@ -5,9 +5,9 @@
 > **Intelligent caching layer for [Flagr](https://github.com/openflagr/flagr)**  
 > High-performance feature flag evaluation with smart local/remote routing
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/Orlando.Bitencourt/vexilla.svg)](https://pkg.go.dev/github.com/Orlando.Bitencourt/vexilla)
-[![Go Report Card](https://goreportcard.com/badge/github.com/Orlando.Bitencourt/vexilla)](https://goreportcard.com/report/github.com/Orlando.Bitencourt/vexilla)
-[![codecov](https://codecov.io/gh/Orlando.Bitencourt/vexilla/branch/main/graph/badge.svg)](https://codecov.io/gh/Orlando.Bitencourt/vexilla)
+[![Go Reference](https://pkg.go.dev/badge/github.com/OrlandoBitencourt/vexilla.svg)](https://pkg.go.dev/github.com/OrlandoBitencourt/vexilla)
+[![Go Report Card](https://goreportcard.com/badge/github.com/OrlandoBitencourt/vexilla)](https://goreportcard.com/report/github.com/OrlandoBitencourt/vexilla)
+[![codecov](https://codecov.io/gh/OrlandoBitencourt/vexilla/branch/main/graph/badge.svg)](https://codecov.io/gh/OrlandoBitencourt/vexilla)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
@@ -218,7 +218,7 @@ Vexilla automatically determines the best evaluation strategy:
 ## 📖 Documentation
 
 - [Architecture Guide](ARCHITECTURE.md) - Deep dive into design
-- [API Reference](https://pkg.go.dev/github.com/Orlando.Bitencourt/vexilla)
+- [API Reference](https://pkg.go.dev/github.com/OrlandoBitencourt/vexilla)
 - [Examples](examples/) - Working code samples
 - [Contributing](CONTRIBUTING.md) - How to contribute
 

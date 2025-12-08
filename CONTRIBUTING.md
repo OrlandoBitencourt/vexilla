@@ -14,7 +14,7 @@ Thank you for your interest in contributing to Vexilla! 🎉
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/vexilla.git
+git clone https://github.com/OrlandoBitencourt/vexilla.git
 cd vexilla
 ```
 
