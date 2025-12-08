@@ -9,6 +9,8 @@
 
 # 🏴 Vexilla
 
+![Vexilla Logo](https://raw.githubusercontent.com/OrlandoBitencourt/vexilla/refs/heads/main/media/logo.jpg)
+
 > **Intelligent caching layer for [Flagr](https://github.com/openflagr/flagr)**  
 > High-performance feature flag evaluation with smart local/remote routing
 
