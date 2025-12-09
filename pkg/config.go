@@ -1,10 +1,13 @@
 package vexilla
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
-// Config holds the configuration for Vexilla cache
+// Config holds the configuration for the flag cache
 type Config struct {
-	// Flagr connection (required)
+	// Flagr connection settings
 	FlagrEndpoint string
 	FlagrAPIKey   string // Optional API key for authentication
 
@@ -73,4 +76,14 @@ func (c Config) Validate() error {
 		return ErrInvalidConfig{Field: "FallbackStrategy", Reason: "must be 'fail_closed', 'fail_open', or 'last_known_good'"}
 	}
 	return nil
+}
+
+// ErrInvalidConfig represents a configuration validation error
+type ErrInvalidConfig struct {
+	Field  string
+	Reason string
+}
+
+func (e ErrInvalidConfig) Error() string {
+	return fmt.Sprintf("invalid config field '%s': %s", e.Field, e.Reason)
 }
