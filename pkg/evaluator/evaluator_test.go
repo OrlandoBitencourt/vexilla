@@ -175,8 +175,7 @@ func TestEvaluator_BuildEnvironment(t *testing.T) {
 	eval := NewEvaluator()
 
 	evalCtx := vexilla.EvaluationContext{
-		EntityID:   "user123",
-		EntityType: "user",
+		EntityID: "user123",
 		Context: map[string]interface{}{
 			"country": "BR",
 			"age":     25,

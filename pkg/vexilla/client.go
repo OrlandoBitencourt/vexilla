@@ -1,3 +1,4 @@
+// pkg/vexilla/vexilla.go
 package vexilla
 
 import (
@@ -6,449 +7,358 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OrlandoBitencourt/vexilla/pkg/circuit"
+	"github.com/OrlandoBitencourt/vexilla/pkg/cache"
 	"github.com/OrlandoBitencourt/vexilla/pkg/client"
 	"github.com/OrlandoBitencourt/vexilla/pkg/evaluator"
-	"github.com/OrlandoBitencourt/vexilla/pkg/server"
-	"github.com/OrlandoBitencourt/vexilla/pkg/storage"
-	"github.com/OrlandoBitencourt/vexilla/pkg/telemetry"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
+	"github.com/OrlandoBitencourt/vexilla/pkg/types"
 )
 
-// Client is the main Vexilla client for feature flag evaluation
+// Client is the main Vexilla client
 type Client struct {
-	config Config
+	config    Config
+	flagr     types.FlagrClient
+	cache     types.FlagCache
+	evaluator types.FlagEvaluator
 
-	// Core components
-	memoryStore *storage.MemoryStore
-	diskStore   *storage.DiskStore
-	flagrClient *client.FlagrClient
-	evaluator   *evaluator.Evaluator
-	strategy    *evaluator.Determiner
-	breaker     *circuit.Breaker
+	refreshTicker *time.Ticker
+	stopCh        chan struct{}
+	wg            sync.WaitGroup
+	mu            sync.RWMutex
+	started       bool
+}
 
-	// Telemetry
-	metrics *telemetry.Metrics
-	tracer  *telemetry.Tracer
+// Config holds Vexilla configuration
+type Config struct {
+	// Flagr connection
+	FlagrEndpoint string
+	FlagrAPIKey   string
 
-	// Servers
-	webhookServer *server.WebhookServer
-	adminServer   *server.AdminServer
+	// Cache settings
+	CacheMaxCost     int64
+	CacheNumCounters int64
 
-	// State
-	ctx              context.Context
-	cancel           context.CancelFunc
-	wg               sync.WaitGroup
-	mu               sync.RWMutex
-	lastRefresh      time.Time
-	consecutiveFails int
+	// Persistence
+	PersistenceEnabled bool
+	PersistencePath    string
+
+	// Refresh behavior
+	RefreshInterval time.Duration
+	InitialTimeout  time.Duration
+
+	// HTTP settings
+	HTTPTimeout   time.Duration
+	RetryAttempts int
+
+	// Fallback behavior
+	FallbackStrategy string // "fail_closed", "fail_open", "last_known_good"
+}
+
+// DefaultConfig returns default configuration
+func DefaultConfig() Config {
+	return Config{
+		FlagrEndpoint:      "http://localhost:18000",
+		CacheMaxCost:       1 << 30, // 1GB
+		CacheNumCounters:   1e7,     // 10M
+		PersistenceEnabled: false,
+		PersistencePath:    "/tmp/vexilla",
+		RefreshInterval:    5 * time.Minute,
+		InitialTimeout:     10 * time.Second,
+		HTTPTimeout:        5 * time.Second,
+		RetryAttempts:      3,
+		FallbackStrategy:   "fail_closed",
+	}
 }
 
 // New creates a new Vexilla client
 func New(config Config) (*Client, error) {
-	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
+	// Create Flagr client
+	flagrClient := client.NewClient(config.FlagrEndpoint, config.FlagrAPIKey)
+	flagrClient.SetTimeout(config.HTTPTimeout)
+	flagrClient.SetRetries(config.RetryAttempts)
+
+	// Create cache
+	cacheConfig := cache.Config{
+		MaxCost:            config.CacheMaxCost,
+		NumCounters:        config.CacheNumCounters,
+		PersistenceEnabled: config.PersistenceEnabled,
+		PersistencePath:    config.PersistencePath,
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Initialize memory store
-	memoryStore, err := storage.NewMemoryStore(
-		config.CacheMaxCost,
-		config.CacheNumCounters,
-		config.CacheBufferItems,
-	)
+	flagCache, err := cache.NewCache(cacheConfig)
 	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("failed to create memory store: %w", err)
+		return nil, fmt.Errorf("failed to create cache: %w", err)
 	}
 
-	// Initialize disk store if enabled
-	var diskStore *storage.DiskStore
-	if config.PersistenceEnabled {
-		diskStore, err = storage.NewDiskStore(config.PersistencePath)
-		if err != nil {
-			cancel()
-			memoryStore.Close()
-			return nil, fmt.Errorf("failed to create disk store: %w", err)
-		}
-	}
+	// Create evaluator
+	flagEvaluator := evaluator.NewEvaluator()
 
-	// Initialize Flagr client
-	flagrClient := client.NewFlagrClient(
-		config.FlagrEndpoint,
-		config.FlagrAPIKey,
-		config.HTTPTimeout,
-	)
-
-	// Initialize telemetry
-	metrics, err := telemetry.NewMetrics("vexilla")
-	if err != nil {
-		cancel()
-		memoryStore.Close()
-		return nil, fmt.Errorf("failed to initialize metrics: %w", err)
-	}
-
-	tracer := telemetry.NewTracer("vexilla")
-
-	// Initialize circuit breaker
-	breaker := circuit.NewBreaker(config.RetryAttempts, 30*time.Second)
-
-	vexillaClient := &Client{
-		config:      config,
-		memoryStore: memoryStore,
-		diskStore:   diskStore,
-		flagrClient: flagrClient,
-		evaluator:   evaluator.NewEvaluator(),
-		strategy:    evaluator.NewDeterminer(),
-		breaker:     breaker,
-		metrics:     metrics,
-		tracer:      tracer,
-		ctx:         ctx,
-		cancel:      cancel,
-	}
-
-	// Setup cache size gauge
-	metrics.SetCacheSizeGauge("vexilla", func(ctx context.Context, observer metric.Int64Observer) error {
-		m := memoryStore.Metrics()
-		observer.Observe(int64(m.KeysAdded() - m.KeysEvicted()))
-		return nil
-	})
-
-	return vexillaClient, nil
+	return &Client{
+		config:    config,
+		flagr:     flagrClient,
+		cache:     flagCache,
+		evaluator: flagEvaluator,
+		stopCh:    make(chan struct{}),
+	}, nil
 }
 
-// Start initializes and starts all background services
+// Start begins background flag refresh
 func (c *Client) Start() error {
-	ctx, span := c.tracer.Tracer().Start(c.ctx, "vexilla.start")
-	defer span.End()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	// Load from disk if enabled
-	if c.config.PersistenceEnabled {
-		if err := c.loadFromDisk(ctx); err != nil {
-			span.AddEvent("disk_load_failed", attribute.String("error", err.Error()))
-		}
+	if c.started {
+		return fmt.Errorf("client already started")
 	}
 
-	// Initial synchronous load from Flagr
-	loadCtx, cancel := context.WithTimeout(ctx, c.config.InitialTimeout)
+	// Initial flag load
+	ctx, cancel := context.WithTimeout(context.Background(), c.config.InitialTimeout)
 	defer cancel()
 
-	if err := c.refresh(loadCtx); err != nil {
-		span.RecordError(err)
-		// Don't fail if we have disk cache
-		if c.diskStore != nil {
-			span.AddEvent("using_disk_cache")
-		} else {
-			return fmt.Errorf("initial load failed and no disk cache available: %w", err)
-		}
+	if err := c.refreshFlags(ctx); err != nil {
+		return fmt.Errorf("failed initial flag load: %w", err)
 	}
 
 	// Start background refresh
+	c.refreshTicker = time.NewTicker(c.config.RefreshInterval)
 	c.wg.Add(1)
 	go c.refreshLoop()
 
-	// Start webhook server if enabled
-	if c.config.WebhookEnabled {
-		webhookServer, err := server.NewWebhookServer(
-			c.config.WebhookPort,
-			c.config.WebhookPath,
-			c.config.WebhookSecret,
-			c,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to create webhook server: %w", err)
-		}
-		c.webhookServer = webhookServer
-		if err := c.webhookServer.Start(ctx); err != nil {
-			return fmt.Errorf("failed to start webhook server: %w", err)
-		}
-	}
-
-	// Start admin API if enabled
-	if c.config.AdminAPIEnabled {
-		adminServer := server.NewAdminServer(
-			c.config.AdminAPIPort,
-			c.config.AdminAPIPath,
-			c,
-		)
-		c.adminServer = adminServer
-		if err := c.adminServer.Start(ctx); err != nil {
-			return fmt.Errorf("failed to start admin server: %w", err)
-		}
-	}
-
+	c.started = true
 	return nil
 }
 
-// Stop gracefully stops all services
+// Stop gracefully stops the client
 func (c *Client) Stop() error {
-	c.cancel()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	// Stop servers
-	if c.webhookServer != nil {
-		c.webhookServer.Stop(context.Background())
-	}
-	if c.adminServer != nil {
-		c.adminServer.Stop(context.Background())
+	if !c.started {
+		return nil
 	}
 
+	close(c.stopCh)
+	if c.refreshTicker != nil {
+		c.refreshTicker.Stop()
+	}
 	c.wg.Wait()
 
-	// Save to disk before shutdown
-	if c.config.PersistenceEnabled {
-		if err := c.saveToDisk(context.Background()); err != nil {
-			return fmt.Errorf("failed to save to disk: %w", err)
-		}
-	}
-
-	c.memoryStore.Close()
+	c.started = false
 	return nil
 }
 
-// Evaluate evaluates a feature flag
-func (c *Client) Evaluate(ctx context.Context, flagKey string, evalCtx EvaluationContext) (*EvaluationResult, error) {
-	ctx, span := c.tracer.Tracer().Start(ctx, "vexilla.evaluate",
-		attribute.String("flag.key", flagKey),
-		attribute.String("entity.id", evalCtx.EntityID),
-	)
-	defer span.End()
-
-	start := time.Now()
-
-	// Get flag from cache
-	flag, found := c.memoryStore.Get(ctx, flagKey)
-	if !found {
-		c.metrics.CacheMisses.Add(ctx, 1, metric.WithAttributes(
-			attribute.String("flag.key", flagKey),
-		))
-		span.SetAttributes(attribute.Bool("cache.hit", false))
-		return nil, ErrFlagNotFound{FlagKey: flagKey}
-	}
-
-	c.metrics.CacheHits.Add(ctx, 1, metric.WithAttributes(
-		attribute.String("flag.key", flagKey),
-	))
-	span.SetAttributes(attribute.Bool("cache.hit", true))
-
-	// Determine evaluation strategy
-	if c.strategy.CanEvaluateLocally(*flag) {
-		// Local evaluation
-		result, err := c.evaluator.Evaluate(ctx, *flag, evalCtx)
-		if err != nil {
-			return nil, err
-		}
-		result.EvaluationTime = time.Since(start)
-
-		c.metrics.LocalEvals.Add(ctx, 1, metric.WithAttributes(
-			attribute.String("flag.key", flagKey),
-		))
-		span.SetAttributes(attribute.String("evaluation.strategy", "local"))
-
-		return result, nil
-	}
-
-	// Remote evaluation (requires Flagr)
-	result, err := c.flagrClient.PostEvaluation(ctx, flagKey, evalCtx)
-	if err != nil {
-		return nil, err
-	}
-	result.EvaluationTime = time.Since(start)
-
-	c.metrics.RemoteEvals.Add(ctx, 1, metric.WithAttributes(
-		attribute.String("flag.key", flagKey),
-	))
-	span.SetAttributes(attribute.String("evaluation.strategy", "remote"))
-
-	return result, nil
+// EvaluationContext contains context for flag evaluation
+type EvaluationContext struct {
+	EntityID string
+	Context  map[string]interface{}
 }
 
-// EvaluateBool is a convenience method that returns a boolean result
+// toTypesContext converts to internal types
+func (e EvaluationContext) toTypesContext() types.EvaluationContext {
+	return types.EvaluationContext{
+		EntityID: e.EntityID,
+		Context:  e.Context,
+	}
+}
+
+// EvaluationResult contains the result of flag evaluation
+type EvaluationResult struct {
+	FlagKey          string
+	VariantKey       string
+	Enabled          bool
+	EvaluatedLocally bool
+	EvaluationTime   time.Duration
+	SegmentID        int64
+	Error            error
+}
+
+// EvaluateBool evaluates a flag and returns a boolean
 func (c *Client) EvaluateBool(ctx context.Context, flagKey string, evalCtx EvaluationContext) bool {
 	result, err := c.Evaluate(ctx, flagKey, evalCtx)
 	if err != nil {
-		return false
+		// Apply fallback strategy
+		return c.applyFallback(flagKey, false)
 	}
-
-	if result.VariantKey == "enabled" || result.VariantKey == "on" || result.VariantKey == "true" {
-		return true
-	}
-
-	return false
+	return result.Enabled
 }
 
-// EvaluateString is a convenience method that returns a string result
-func (c *Client) EvaluateString(ctx context.Context, flagKey string, evalCtx EvaluationContext, defaultVal string) string {
+// EvaluateString evaluates a flag and returns a string variant
+func (c *Client) EvaluateString(ctx context.Context, flagKey string, evalCtx EvaluationContext, defaultValue string) string {
 	result, err := c.Evaluate(ctx, flagKey, evalCtx)
-	if err != nil {
-		return defaultVal
+	if err != nil || result.VariantKey == "" {
+		return defaultValue
 	}
 	return result.VariantKey
 }
 
-// refresh fetches flags from Flagr and updates cache
-func (c *Client) refresh(ctx context.Context) error {
-	ctx, span := c.tracer.Tracer().Start(ctx, "vexilla.refresh")
-	defer span.End()
+// Evaluate performs full flag evaluation
+func (c *Client) Evaluate(ctx context.Context, flagKey string, evalCtx EvaluationContext) (*EvaluationResult, error) {
+	startTime := time.Now()
+	typesCtx := evalCtx.toTypesContext()
 
-	start := time.Now()
-	defer func() {
-		c.metrics.RefreshLatency.Record(ctx, float64(time.Since(start).Milliseconds()))
-	}()
-
-	// Use circuit breaker
-	err := c.breaker.Call(func() error {
-		flags, err := c.flagrClient.GetFlags(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Update memory store
-		for _, flag := range flags {
-			c.memoryStore.Set(ctx, flag.Key, flag)
-		}
-		c.memoryStore.Wait()
-
-		c.mu.Lock()
-		c.lastRefresh = time.Now()
-		c.consecutiveFails = 0
-		c.mu.Unlock()
-
-		span.SetAttributes(attribute.Int("flags.count", len(flags)))
-		return nil
-	})
-
-	if err != nil {
-		c.metrics.RefreshFailure.Add(ctx, 1)
-		c.mu.Lock()
-		c.consecutiveFails++
-		c.mu.Unlock()
-		return err
+	result := &EvaluationResult{
+		FlagKey: flagKey,
 	}
 
-	c.metrics.RefreshSuccess.Add(ctx, 1)
-	return nil
-}
+	// Try to get flag from cache
+	flag, found := c.cache.GetFlag(flagKey)
+	if !found {
+		// Flag not in cache, fetch from Flagr
+		var err error
+		flag, err = c.flagr.GetFlag(ctx, flagKey)
+		if err != nil {
+			result.Error = fmt.Errorf("failed to fetch flag: %w", err)
+			result.Enabled = c.applyFallback(flagKey, false)
+			result.EvaluationTime = time.Since(startTime)
+			return result, result.Error
+		}
 
-// refreshLoop runs periodic background refresh
-func (c *Client) refreshLoop() {
-	defer c.wg.Done()
+		// Cache the flag
+		if err := c.cache.SetFlag(flag); err != nil {
+			// Log warning but continue
+		}
+	}
 
-	ticker := time.NewTicker(c.config.RefreshInterval)
-	defer ticker.Stop()
+	// Check if we can evaluate locally
+	if c.evaluator.CanEvaluateLocally(flag) {
+		enabled, err := c.evaluator.Evaluate(flag, typesCtx)
+		if err != nil {
+			result.Error = fmt.Errorf("local evaluation failed: %w", err)
+			result.Enabled = c.applyFallback(flagKey, false)
+		} else {
+			result.Enabled = enabled
+			result.EvaluatedLocally = true
 
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		case <-ticker.C:
-			if err := c.refresh(c.ctx); err != nil {
-				// Errors are logged via telemetry
-			} else if c.config.PersistenceEnabled {
-				c.saveToDisk(c.ctx)
+			// Get variant key from flag
+			if enabled && len(flag.Segments) > 0 {
+				for _, seg := range flag.Segments {
+					if len(seg.Distributions) > 0 {
+						result.VariantKey = seg.Distributions[0].VariantKey
+						result.SegmentID = seg.ID
+						break
+					}
+				}
+			}
+		}
+	} else {
+		// Need to evaluate via Flagr
+		enabled, err := c.flagr.EvaluateFlag(ctx, flagKey, typesCtx)
+		if err != nil {
+			result.Error = fmt.Errorf("flagr evaluation failed: %w", err)
+			result.Enabled = c.applyFallback(flagKey, false)
+		} else {
+			result.Enabled = enabled
+			result.EvaluatedLocally = false
+
+			// For remote evaluation, we'd need the full response
+			// For now, just set a basic variant
+			if enabled {
+				result.VariantKey = "enabled"
 			}
 		}
 	}
+
+	result.EvaluationTime = time.Since(startTime)
+	return result, result.Error
 }
 
-// Implement server.WebhookHandler interface
-func (c *Client) OnFlagUpdated(ctx context.Context, flagKeys []string) error {
-	for _, key := range flagKeys {
-		c.memoryStore.Delete(ctx, key)
+// GetFlag retrieves a flag definition
+func (c *Client) GetFlag(ctx context.Context, flagKey string) (*types.Flag, error) {
+	// Try cache first
+	flag, found := c.cache.GetFlag(flagKey)
+	if found {
+		return flag, nil
 	}
-	return c.refresh(ctx)
+
+	// Fetch from Flagr
+	flag, err := c.flagr.GetFlag(ctx, flagKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch flag: %w", err)
+	}
+
+	// Cache it
+	c.cache.SetFlag(flag)
+	return flag, nil
 }
 
-func (c *Client) OnFlagDeleted(ctx context.Context, flagKeys []string) error {
-	for _, key := range flagKeys {
-		c.memoryStore.Delete(ctx, key)
+// GetCacheStats returns cache statistics
+func (c *Client) GetCacheStats() cache.Stats {
+	return c.cache.GetStats()
+}
+
+// InvalidateFlag removes a flag from cache
+func (c *Client) InvalidateFlag(flagKey string) {
+	c.cache.InvalidateFlag(flagKey)
+}
+
+// RefreshFlags manually triggers a flag refresh
+func (c *Client) RefreshFlags(ctx context.Context) error {
+	return c.refreshFlags(ctx)
+}
+
+// refreshFlags fetches all flags from Flagr and updates cache
+func (c *Client) refreshFlags(ctx context.Context) error {
+	flags, err := c.flagr.ListFlags(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list flags: %w", err)
 	}
+
+	// Update cache
+	if err := c.cache.SetFlags(flags); err != nil {
+		return fmt.Errorf("failed to update cache: %w", err)
+	}
+
 	return nil
 }
 
-// Implement server.AdminHandler interface
-func (c *Client) GetStats(ctx context.Context) (interface{}, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+// refreshLoop runs periodic flag refresh
+func (c *Client) refreshLoop() {
+	defer c.wg.Done()
 
-	m := c.memoryStore.Metrics()
+	for {
+		select {
+		case <-c.refreshTicker.C:
+			ctx, cancel := context.WithTimeout(context.Background(), c.config.InitialTimeout)
+			if err := c.refreshFlags(ctx); err != nil {
+				// Log error but continue
+				fmt.Printf("Warning: flag refresh failed: %v\n", err)
+			}
+			cancel()
 
-	return Stats{
-		KeysAdded:        m.KeysAdded(),
-		KeysUpdated:      m.KeysUpdated(),
-		KeysEvicted:      m.KeysEvicted(),
-		CostAdded:        m.CostAdded(),
-		CostEvicted:      m.CostEvicted(),
-		SetsDropped:      m.SetsDropped(),
-		SetsRejected:     m.SetsRejected(),
-		GetsKept:         m.GetsKept(),
-		GetsDropped:      m.GetsDropped(),
-		HitRatio:         m.Ratio(),
-		LastRefresh:      c.lastRefresh,
-		ConsecutiveFails: c.consecutiveFails,
-		CircuitOpen:      c.breaker.State() == circuit.StateOpen,
-	}, nil
-}
-
-func (c *Client) InvalidateFlags(ctx context.Context, flagKeys []string) error {
-	for _, key := range flagKeys {
-		c.memoryStore.Delete(ctx, key)
+		case <-c.stopCh:
+			return
+		}
 	}
-	return nil
 }
 
-func (c *Client) InvalidateAll(ctx context.Context) error {
-	c.memoryStore.Clear(ctx)
-	return nil
-}
-
-func (c *Client) ForceRefresh(ctx context.Context) error {
-	return c.refresh(ctx)
-}
-
-func (c *Client) HealthCheck(ctx context.Context) (interface{}, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	status := "healthy"
-	if c.breaker.State() == circuit.StateOpen {
-		status = "degraded"
+// applyFallback applies the configured fallback strategy
+func (c *Client) applyFallback(flagKey string, defaultValue bool) bool {
+	switch c.config.FallbackStrategy {
+	case "fail_open":
+		return true
+	case "fail_closed":
+		return false
+	case "last_known_good":
+		// Try to get from cache
+		flag, found := c.cache.GetFlag(flagKey)
+		if found && flag.Enabled {
+			return true
+		}
+		return defaultValue
+	default:
+		return defaultValue
 	}
+}
+
+// Health returns the health status of the client
+func (c *Client) Health() map[string]interface{} {
+	stats := c.cache.GetStats()
 
 	return map[string]interface{}{
-		"status":            status,
-		"circuit_open":      c.breaker.State() == circuit.StateOpen,
-		"last_refresh":      c.lastRefresh.Format(time.RFC3339),
-		"consecutive_fails": c.consecutiveFails,
-	}, nil
-}
-
-// loadFromDisk loads flags from disk storage
-func (c *Client) loadFromDisk(ctx context.Context) error {
-	if c.diskStore == nil {
-		return nil
+		"started": c.started,
+		"cache": map[string]interface{}{
+			"hits":        stats.HitRatio,
+			"misses":      stats.ConsecutiveFails,
+			"hit_rate":    c.cache.HitRate(),
+			"last_update": stats.LastRefresh,
+		},
 	}
-
-	flags, err := c.diskStore.Load(ctx)
-	if err != nil {
-		return err
-	}
-
-	for key, flag := range flags {
-		c.memoryStore.Set(ctx, key, flag)
-	}
-	c.memoryStore.Wait()
-
-	return nil
-}
-
-// saveToDisk saves flags to disk storage
-func (c *Client) saveToDisk(ctx context.Context) error {
-	if c.diskStore == nil {
-		return nil
-	}
-
-	flags := make(map[string]Flag)
-	return c.diskStore.Save(ctx, flags)
 }
