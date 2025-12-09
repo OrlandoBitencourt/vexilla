@@ -24,7 +24,7 @@ const (
 
 // Flag represents a feature flag with its evaluation rules
 type Flag struct {
-	ID          string        `json:"id"`
+	ID          int           `json:"id"`
 	Key         string        `json:"key"`
 	Default     interface{}   `json:"default"`
 	Rules       []FlagRule    `json:"rules"`

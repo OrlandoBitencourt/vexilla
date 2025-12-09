@@ -11,7 +11,7 @@ import (
 func main() {
 	// Create configuration
 	config := flagrcache.DefaultConfig()
-	config.FlagrEndpoint = "localhost:18000"
+	config.FlagrEndpoint = "http://0.0.0.0:18000"
 
 	// Create cache
 	cache, err := flagrcache.New(config)

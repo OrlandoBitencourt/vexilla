@@ -1,5 +1,6 @@
 github.com/OrlandoBitencourt/vexilla v1.0.2 h1:wf9r8HQfG7lWL2mPkPNb09opgRKki0GqNXkdihLcQew=
 github.com/OrlandoBitencourt/vexilla v1.0.2/go.mod h1:kSQb6OuQAM5hI+Ya6UL+6/0gKbNXQXF6AFKwpeVuaYE=
+github.com/OrlandoBitencourt/vexilla v1.0.4 h1:erdV9vj0L0QhjMDSR66GnAoOf/VGd+bKJHXrLCOY/6Q=
 github.com/OrlandoBitencourt/vexilla v1.0.4/go.mod h1:h82/ktfPg8OMy5o8lqWxya8kHLRXYoYs81ODUYWAhec=
 github.com/antonmedv/expr v1.15.5 h1:y0Iz3cEwmpRz5/r3w4qQR0MfIqJGdGM1zbhD/v0G5Vg=
 github.com/antonmedv/expr v1.15.5/go.mod h1:0E/6TxnOlRNp81GMzX9QfDPAmHo2Phg00y4JUv1ihsE=
