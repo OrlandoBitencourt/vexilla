@@ -3,7 +3,7 @@ package vexilla
 import (
 	"context"
 
-	"github.com/antonmedv/expr"
+	"github.com/expr-lang/expr"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"

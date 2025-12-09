@@ -5,7 +5,7 @@ go 1.25.4
 require github.com/OrlandoBitencourt/vexilla v1.0.2
 
 require (
-	github.com/antonmedv/expr v1.15.5 // indirect
+	github.com/expr-lang/expr v1.15.5 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

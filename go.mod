@@ -3,7 +3,7 @@ module github.com/OrlandoBitencourt/vexilla
 go 1.25.4
 
 require (
-	github.com/antonmedv/expr v1.15.5
+	github.com/expr-lang/expr v1.15.5
 	github.com/dgraph-io/ristretto v0.1.1
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/metric v1.38.0

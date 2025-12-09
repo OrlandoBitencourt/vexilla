@@ -298,7 +298,7 @@ MIT License - see [LICENSE](LICENSE) for details
 
 - [**Flagr**](https://github.com/openflagr/flagr) by Checkr/OpenFlagr - The feature flagging service
 - [**Ristretto**](https://github.com/dgraph-io/ristretto) by DGraph - High-performance cache
-- [**expr**](https://github.com/antonmedv/expr) by Anton Medvedev - Expression evaluation
+- [**expr**](https://github.com/expr-lang/expr) by Anton Medvedev - Expression evaluation
 - [**OpenTelemetry**](https://opentelemetry.io/) - Observability framework
 
 ---

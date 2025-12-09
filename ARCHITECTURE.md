@@ -124,7 +124,7 @@ func (d *Determiner) CanEvaluateLocally(flag Flag) bool {
 
 ### 4. Evaluator (`pkg/evaluator/evaluator.go`)
 
-Evaluates flags locally using [antonmedv/expr](https://github.com/antonmedv/expr).
+Evaluates flags locally using [expr-lang/expr](https://github.com/expr-lang/expr).
 
 **Supports:**
 - Operators: `EQ`, `NEQ`, `IN`, `NOTIN`, `MATCHES`
