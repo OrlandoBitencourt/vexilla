@@ -42,6 +42,7 @@ type Config struct {
 // DefaultConfig returns a configuration with sensible defaults
 func DefaultConfig() Config {
 	return Config{
+		FlagrEndpoint:      "http://0.0.0.0",
 		RefreshInterval:    5 * time.Minute,
 		InitialTimeout:     10 * time.Second,
 		HTTPTimeout:        5 * time.Second,

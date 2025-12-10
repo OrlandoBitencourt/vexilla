@@ -1,0 +1,19 @@
+version: '3.7'
+
+services:
+  flagr:
+    image: ghcr.io/openflagr/flagr:latest
+    container_name: flagr
+    ports:
+      - "18000:18000"
+    environment:
+      - FLAGR_DB_DRIVER=sqlite3
+      - FLAGR_DB_DSN=/data/flagr.sqlite3
+      - FLAGR_BASIC_AUTH_ENABLED=true
+      - FLAGR_BASIC_AUTH_USERNAME=admin
+      - FLAGR_BASIC_AUTH_PASSWORD=senha_super_segura
+      - FLAGR_UI_APP_NAME=Flagr - Vexilla
+      - FLAGR_UI_PRIMARY_COLOR=#1565c0
+
+    volumes:
+      - ./data:/data
