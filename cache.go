@@ -727,6 +727,7 @@ func (c *Cache) fetchFlagsFromFlagr(ctx context.Context) ([]Flag, error) {
 	// Logo após ler bodyBytes
 	fmt.Printf("📦 Raw Response: %s\n", string(bodyBytes))
 	fmt.Printf("📦 Flagr Flags Parsed: %d\n", len(flagrFlags))
+	fmt.Printf("📦 Flagr Complete Flags Converted: %d\n", len(completeFlagrFlags))
 	fmt.Printf("📦 Vexilla Flags Converted: %d\n", len(vexillaFlags))
 
 	return vexillaFlags, nil
