@@ -721,7 +721,7 @@ func (c *Cache) fetchFlagsFromFlagr(ctx context.Context) ([]Flag, error) {
 		fmt.Printf("📦 Detail Raw Response: %s\n", string(detailBodyBytes))
 	}
 
-	vexillaFlags := parseFlagrResponse(flagrFlags)
+	vexillaFlags := parseFlagrResponse(completeFlagrFlags)
 
 	span.SetAttributes(attribute.Int("flags.count", len(vexillaFlags)))
 
