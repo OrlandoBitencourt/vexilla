@@ -44,6 +44,9 @@ func main() {
 	// Give it a moment to load flags
 	time.Sleep(500 * time.Millisecond)
 
+	stats := cache.GetCacheStats()
+	log.Printf("📊 Cache loaded %d flags\n", stats.KeysAdded)
+
 	ctx := context.Background()
 
 	// 4. Boolean flag evaluation (using helper to get actual key)
@@ -62,11 +65,13 @@ func main() {
 
 	enabled := cache.EvaluateBool(ctx, newFeatureKey, evalCtx)
 	log.Printf("New feature enabled: %v\n\n", enabled)
+
 	newFeat, err := cache.Evaluate(ctx, newFeatureKey, evalCtx)
 	if err != nil {
-		log.Printf("New feature enabled: %v\n\n", err.Error())
+		log.Printf("❌ Evaluation error: %v\n\n", err.Error())
+	} else {
+		log.Printf("✅ Evaluation result: %v\n\n", newFeat)
 	}
-	log.Printf("New feature flag attackment: %v\n\n", newFeat)
 
 	// 5. String flag evaluation
 	log.Println("=== Example 2: String Flag ===")
@@ -99,7 +104,7 @@ func main() {
 
 	// 8. Cache statistics
 	log.Println("=== Example 5: Cache Statistics ===")
-	stats := cache.GetCacheStats()
+	stats = cache.GetCacheStats()
 	log.Printf("Keys Added: %d\n", stats.KeysAdded)
 	log.Printf("Keys Evicted: %d\n", stats.KeysEvicted)
 	log.Printf("Hit Ratio: %.2f%%\n", stats.HitRatio*100)

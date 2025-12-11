@@ -672,12 +672,21 @@ func (c *Cache) fetchFlagsFromFlagr(ctx context.Context) ([]Flag, error) {
 		return nil, fmt.Errorf("flagr returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var flags []Flag
-	if err := json.NewDecoder(resp.Body).Decode(&flags); err != nil {
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var flagrFlags []FlagrResponse
+	if err := json.Unmarshal(bodyBytes, &flagrFlags); err != nil {
 		return nil, fmt.Errorf("failed to decode flags: %w", err)
 	}
 
-	return flags, nil
+	vexillaFlags := parseFlagrResponse(flagrFlags)
+
+	span.SetAttributes(attribute.Int("flags.count", len(vexillaFlags)))
+
+	return vexillaFlags, nil
 }
 
 // handleCacheMiss handles the case when a flag is not in cache
