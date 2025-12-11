@@ -682,6 +682,42 @@ func (c *Cache) fetchFlagsFromFlagr(ctx context.Context) ([]Flag, error) {
 		return nil, fmt.Errorf("failed to decode flags: %w", err)
 	}
 
+	var completeFlagrFlags []FlagrResponse
+	for _, f := range flagrFlags {
+		url := fmt.Sprintf("%s/api/v1/flags%s", c.config.FlagrEndpoint, f.ID)
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		if c.config.FlagrAPIKey != "" {
+			req.Header.Set("Authorization", "Bearer "+c.config.FlagrAPIKey)
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			span.RecordError(err)
+			return nil, fmt.Errorf("flagr request failed: %w", err)
+		}
+		defer resp.Body.Close()
+
+		span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			return nil, fmt.Errorf("flagr returned status %d: %s", resp.StatusCode, string(body))
+		}
+
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response body: %w", err)
+		}
+
+		if err := json.Unmarshal(bodyBytes, &completeFlagrFlags); err != nil {
+			return nil, fmt.Errorf("failed to decode flags: %w", err)
+		}
+	}
+
 	vexillaFlags := parseFlagrResponse(flagrFlags)
 
 	span.SetAttributes(attribute.Int("flags.count", len(vexillaFlags)))
