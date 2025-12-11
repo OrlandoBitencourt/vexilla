@@ -708,16 +708,17 @@ func (c *Cache) fetchFlagsFromFlagr(ctx context.Context) ([]Flag, error) {
 			return nil, fmt.Errorf("flagr returned status %d: %s", resp.StatusCode, string(body))
 		}
 
-		bodyBytes, err := io.ReadAll(resp.Body)
+		detailBodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read response body: %w", err)
 		}
 
 		var r FlagrResponse
-		if err := json.Unmarshal(bodyBytes, &r); err != nil {
+		if err := json.Unmarshal(detailBodyBytes, &r); err != nil {
 			return nil, fmt.Errorf("failed to decode flags: %w", err)
 		}
 		completeFlagrFlags = append(completeFlagrFlags, r)
+		fmt.Printf("📦 Detail Raw Response: %s\n", string(detailBodyBytes))
 	}
 
 	vexillaFlags := parseFlagrResponse(flagrFlags)
