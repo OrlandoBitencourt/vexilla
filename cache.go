@@ -684,7 +684,7 @@ func (c *Cache) fetchFlagsFromFlagr(ctx context.Context) ([]Flag, error) {
 
 	var completeFlagrFlags []FlagrResponse
 	for _, f := range flagrFlags {
-		url := fmt.Sprintf("%s/api/v1/flags%d", c.config.FlagrEndpoint, f.ID)
+		url := fmt.Sprintf("%s/api/v1/flags/%d", c.config.FlagrEndpoint, f.ID)
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			return nil, err
@@ -713,9 +713,11 @@ func (c *Cache) fetchFlagsFromFlagr(ctx context.Context) ([]Flag, error) {
 			return nil, fmt.Errorf("failed to read response body: %w", err)
 		}
 
-		if err := json.Unmarshal(bodyBytes, &completeFlagrFlags); err != nil {
+		var r FlagrResponse
+		if err := json.Unmarshal(bodyBytes, &r); err != nil {
 			return nil, fmt.Errorf("failed to decode flags: %w", err)
 		}
+		completeFlagrFlags = append(completeFlagrFlags, r)
 	}
 
 	vexillaFlags := parseFlagrResponse(flagrFlags)
