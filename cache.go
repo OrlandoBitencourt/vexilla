@@ -648,7 +648,7 @@ func (c *Cache) fetchFlagsFromFlagr(ctx context.Context) ([]Flag, error) {
 	ctx, span := c.tracer.Start(ctx, "cache.fetch_from_flagr")
 	defer span.End()
 
-	url := fmt.Sprintf("%s/api/v1/flags", c.config.FlagrEndpoint)
+	url := fmt.Sprintf("%s/api/v1/flags?expand=segments,variants,distributions", c.config.FlagrEndpoint)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
