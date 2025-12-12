@@ -3,6 +3,7 @@ package circuit
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -180,13 +181,16 @@ func TestBreaker_Reset(t *testing.T) {
 }
 
 func TestBreaker_StateChangeCallback(t *testing.T) {
+	// Thread-safe slice for state changes
+	var mu sync.Mutex
 	stateChanges := make([]string, 0)
 
 	config := DefaultConfig()
 	config.MaxFailures = 2
 	config.OnStateChange = func(from, to State) {
-		stateChanges = append(stateChanges,
-			from.String()+" -> "+to.String())
+		mu.Lock()
+		stateChanges = append(stateChanges, from.String()+" -> "+to.String())
+		mu.Unlock()
 	}
 
 	breaker := New(config)
@@ -199,11 +203,17 @@ func TestBreaker_StateChangeCallback(t *testing.T) {
 		})
 	}
 
-	// Wait for callback
-	time.Sleep(10 * time.Millisecond)
+	// Wait for callback to complete
+	time.Sleep(50 * time.Millisecond)
 
-	require.Len(t, stateChanges, 1)
-	assert.Equal(t, "closed -> open", stateChanges[0])
+	// Read state changes safely
+	mu.Lock()
+	changes := make([]string, len(stateChanges))
+	copy(changes, stateChanges)
+	mu.Unlock()
+
+	require.Len(t, changes, 1)
+	assert.Equal(t, "closed -> open", changes[0])
 }
 
 func TestBreaker_ConcurrentCalls(t *testing.T) {

@@ -137,8 +137,8 @@ func (b *Breaker) beforeCall() error {
 	case StateOpen:
 		// Check if timeout has elapsed
 		if time.Since(b.lastStateChange) >= b.timeout {
-			// Transition to half-open
-			b.setState(StateHalfOpen)
+			// Transition to half-open (must be called with lock held)
+			b.setStateLocked(StateHalfOpen)
 			return nil
 		}
 
@@ -165,14 +165,14 @@ func (b *Breaker) afterCall(err error) {
 	defer b.mu.Unlock()
 
 	if err != nil {
-		b.onFailure()
+		b.onFailureLocked()
 	} else {
-		b.onSuccess()
+		b.onSuccessLocked()
 	}
 }
 
-// onSuccess handles successful calls
-func (b *Breaker) onSuccess() {
+// onSuccessLocked handles successful calls (must be called with lock held)
+func (b *Breaker) onSuccessLocked() {
 	b.totalSuccesses++
 	b.failures = 0
 
@@ -185,18 +185,18 @@ func (b *Breaker) onSuccess() {
 
 		// If we've had enough successes in half-open, close the circuit
 		if b.successes >= 2 {
-			b.setState(StateClosed)
+			b.setStateLocked(StateClosed)
 			b.successes = 0
 		}
 
 	case StateOpen:
 		// This shouldn't happen, but reset if it does
-		b.setState(StateClosed)
+		b.setStateLocked(StateClosed)
 	}
 }
 
-// onFailure handles failed calls
-func (b *Breaker) onFailure() {
+// onFailureLocked handles failed calls (must be called with lock held)
+func (b *Breaker) onFailureLocked() {
 	b.totalFailures++
 	b.failures++
 	b.lastFailureTime = time.Now()
@@ -205,12 +205,12 @@ func (b *Breaker) onFailure() {
 	case StateClosed:
 		// Check if we've exceeded max failures
 		if b.failures >= b.maxFailures {
-			b.setState(StateOpen)
+			b.setStateLocked(StateOpen)
 		}
 
 	case StateHalfOpen:
 		// Any failure in half-open immediately opens the circuit
-		b.setState(StateOpen)
+		b.setStateLocked(StateOpen)
 		b.successes = 0
 
 	case StateOpen:
@@ -219,8 +219,8 @@ func (b *Breaker) onFailure() {
 	}
 }
 
-// setState transitions to a new state
-func (b *Breaker) setState(newState State) {
+// setStateLocked transitions to a new state (must be called with lock held)
+func (b *Breaker) setStateLocked(newState State) {
 	oldState := b.state
 
 	if oldState == newState {
@@ -230,7 +230,7 @@ func (b *Breaker) setState(newState State) {
 	b.state = newState
 	b.lastStateChange = time.Now()
 
-	// Call state change callback
+	// Call state change callback (don't hold lock during callback)
 	if b.onStateChange != nil {
 		go b.onStateChange(oldState, newState)
 	}
@@ -248,7 +248,7 @@ func (b *Breaker) Reset() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	b.setState(StateClosed)
+	b.setStateLocked(StateClosed)
 	b.failures = 0
 	b.successes = 0
 }
