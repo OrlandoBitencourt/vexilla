@@ -10,12 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//
-// ---------------------------------------------------------
-// MemoryStorage Tests
-// ---------------------------------------------------------
-//
-
 func newTestConfig() Config {
 	return Config{
 		MaxCost:        10 * 1024 * 1024, // 10MB
@@ -102,12 +96,6 @@ func TestMemoryStorage_Clear(t *testing.T) {
 	_, err = s.Get(ctx, "a")
 	assert.ErrorIs(t, err, ErrNotFound)
 }
-
-//
-// ---------------------------------------------------------
-// MockStorage Tests
-// ---------------------------------------------------------
-//
 
 func TestMockStorage_AllMethods(t *testing.T) {
 	mock := NewMockStorage()

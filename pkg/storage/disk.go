@@ -35,10 +35,6 @@ func (d *DiskStorage) filePath(key string) string {
 	return filepath.Join(d.dir, fmt.Sprintf("%s.json", key))
 }
 
-// -------------------------
-// CRUD
-// -------------------------
-
 func (d *DiskStorage) Get(ctx context.Context, key string) (*domain.Flag, error) {
 	select {
 	case <-ctx.Done():
@@ -144,10 +140,6 @@ func (d *DiskStorage) List(ctx context.Context) ([]string, error) {
 	return keys, nil
 }
 
-// -------------------------
-// Snapshot
-// -------------------------
-
 func (d *DiskStorage) SaveSnapshot(ctx context.Context, snapshot map[string]domain.Flag) error {
 	select {
 	case <-ctx.Done():
@@ -199,8 +191,6 @@ func (d *DiskStorage) LoadSnapshot(ctx context.Context) (map[string]domain.Flag,
 
 	return snapshot, nil
 }
-
-// -------------------------
 
 func (d *DiskStorage) Metrics() Metrics { return d.metrics }
 

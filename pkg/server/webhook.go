@@ -67,14 +67,12 @@ func (w *WebhookServer) handleWebhook(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Parse payload
 	var payload WebhookPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
 		http.Error(rw, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	// Handle event
 	w.handleEvent(payload)
 
 	rw.Header().Set("Content-Type", "application/json")
