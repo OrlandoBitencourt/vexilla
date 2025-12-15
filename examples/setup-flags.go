@@ -17,9 +17,10 @@ const (
 )
 
 type FlagrFlag struct {
-	Key         string `json:"key"`
-	Description string `json:"description"`
-	Enabled     bool   `json:"enabled"`
+	Key         string   `json:"key"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	Enabled     bool     `json:"enabled"`
 }
 
 type FlagrSegment struct {
@@ -162,6 +163,7 @@ func createNewFeatureFlag() error {
 		Key:         randomKey("new_feature"),
 		Description: "FLAG:new_feature",
 		Enabled:     true,
+		Tags:        []string{},
 	})
 	if err != nil {
 		return err
@@ -203,7 +205,9 @@ func createDarkModeFlag() error {
 		Key:         randomKey("dark_mode"),
 		Description: "FLAG:dark_mode",
 		Enabled:     true,
+		Tags:        []string{},
 	})
+
 	if err != nil {
 		return err
 	}

@@ -134,7 +134,6 @@ func TestDiskStorage_LoadSnapshot_InvalidJSON(t *testing.T) {
 	ds, err := NewDiskStorage(dir)
 	require.NoError(t, err)
 
-	// cria snapshot quebrado
 	file := filepath.Join(dir, snapshotFile)
 	os.WriteFile(file, []byte("invalid-json"), 0644)
 
