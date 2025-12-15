@@ -1,7 +1,7 @@
 package evaluator
 
 import (
-	"github.com/OrlandoBitencourt/vexilla/pkg/domain"
+	"github.com/OrlandoBitencourt/vexilla/internal/domain"
 )
 
 // StrategyDeterminer determines the evaluation strategy for a flag

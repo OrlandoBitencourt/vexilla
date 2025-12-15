@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OrlandoBitencourt/vexilla/pkg/domain"
-	"github.com/OrlandoBitencourt/vexilla/pkg/evaluator"
-	"github.com/OrlandoBitencourt/vexilla/pkg/flagr"
-	"github.com/OrlandoBitencourt/vexilla/pkg/storage"
+	"github.com/OrlandoBitencourt/vexilla/internal/domain"
+	"github.com/OrlandoBitencourt/vexilla/internal/evaluator"
+	"github.com/OrlandoBitencourt/vexilla/internal/flagr"
+	"github.com/OrlandoBitencourt/vexilla/internal/storage"
 )
 
 // Cache is the main orchestrator that coordinates all components

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/OrlandoBitencourt/vexilla/pkg/domain"
+	"github.com/OrlandoBitencourt/vexilla/internal/domain"
 )
 
 // HTTPClient implements Client interface using HTTP

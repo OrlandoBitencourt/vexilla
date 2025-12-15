@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OrlandoBitencourt/vexilla/pkg/domain"
+	"github.com/OrlandoBitencourt/vexilla/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

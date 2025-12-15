@@ -3,9 +3,9 @@ package cache
 import (
 	"time"
 
-	"github.com/OrlandoBitencourt/vexilla/pkg/evaluator"
-	"github.com/OrlandoBitencourt/vexilla/pkg/flagr"
-	"github.com/OrlandoBitencourt/vexilla/pkg/storage"
+	"github.com/OrlandoBitencourt/vexilla/internal/evaluator"
+	"github.com/OrlandoBitencourt/vexilla/internal/flagr"
+	"github.com/OrlandoBitencourt/vexilla/internal/storage"
 )
 
 // Option is a functional option for configuring Cache

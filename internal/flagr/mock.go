@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/OrlandoBitencourt/vexilla/pkg/domain"
+	"github.com/OrlandoBitencourt/vexilla/internal/domain"
 )
 
 // MockClient is a mock implementation of Client for testing

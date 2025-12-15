@@ -3,7 +3,7 @@ package flagr
 import (
 	"context"
 
-	"github.com/OrlandoBitencourt/vexilla/pkg/domain"
+	"github.com/OrlandoBitencourt/vexilla/internal/domain"
 )
 
 // Client defines the interface for Flagr communication (HTTP, mock, etc.)

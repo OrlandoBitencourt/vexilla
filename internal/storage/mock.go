@@ -1,4 +1,4 @@
-// pkg/storage/mock.go
+// internal/storage/mock.go
 package storage
 
 import (
@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OrlandoBitencourt/vexilla/pkg/domain"
+	"github.com/OrlandoBitencourt/vexilla/internal/domain"
 )
 
 // MockStorage is a mock implementation of Storage for testing

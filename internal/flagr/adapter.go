@@ -1,7 +1,7 @@
 package flagr
 
 import (
-	"github.com/OrlandoBitencourt/vexilla/pkg/domain"
+	"github.com/OrlandoBitencourt/vexilla/internal/domain"
 )
 
 // ToDomain converts Flagr API models to domain models

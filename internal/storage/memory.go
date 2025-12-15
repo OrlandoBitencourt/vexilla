@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/OrlandoBitencourt/vexilla/pkg/domain"
+	"github.com/OrlandoBitencourt/vexilla/internal/domain"
 	"github.com/dgraph-io/ristretto"
 )
 

@@ -1,11 +1,11 @@
-// pkg/storage/storage.go
+// internal/storage/storage.go
 package storage
 
 import (
 	"context"
 	"time"
 
-	"github.com/OrlandoBitencourt/vexilla/pkg/domain"
+	"github.com/OrlandoBitencourt/vexilla/internal/domain"
 )
 
 // Storage defines the interface for flag storage

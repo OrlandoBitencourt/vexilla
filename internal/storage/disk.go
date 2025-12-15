@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OrlandoBitencourt/vexilla/pkg/domain"
+	"github.com/OrlandoBitencourt/vexilla/internal/domain"
 )
 
 var ErrNotFound = errors.New("flag not found")

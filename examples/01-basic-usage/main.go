@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	fmt.Println("=== Example 1: Basic Flag Usage ===\n")
+	fmt.Println("=== Example 1: Basic Flag Usage ===")
 
 	// Create Flagr client
 	flagrClient := flagr.NewHTTPClient(flagr.Config{
@@ -68,28 +68,28 @@ func main() {
 		},
 	}
 
-	enabled := c.EvaluateBool(ctx, "new_feature", evalCtx)
+	enabled := c.EvaluateBool(ctx, "new_feature-55e78f0d", evalCtx)
 	fmt.Printf("   Result: %v\n\n", enabled)
 
 	// Example 2: String flag evaluation
 	fmt.Println("2. String Flag Evaluation")
 	fmt.Println("   Flag: ui_theme")
 
-	theme := c.EvaluateString(ctx, "ui_theme", evalCtx, "light")
+	theme := c.EvaluateString(ctx, "ui_theme-37354167", evalCtx, "light")
 	fmt.Printf("   Theme: %s\n\n", theme)
 
 	// Example 3: Integer flag evaluation
 	fmt.Println("3. Integer Flag Evaluation")
 	fmt.Println("   Flag: max_items")
 
-	maxItems := c.EvaluateInt(ctx, "max_items", evalCtx, 10)
+	maxItems := c.EvaluateInt(ctx, "max_items-23ee28c9", evalCtx, 10)
 	fmt.Printf("   Max Items: %d\n\n", maxItems)
 
 	// Example 4: Full evaluation with details
 	fmt.Println("4. Full Evaluation with Details")
 	fmt.Println("   Flag: brazil_launch")
 
-	result, err := c.Evaluate(ctx, "brazil_launch", evalCtx)
+	result, err := c.Evaluate(ctx, "brazil_launch-91ca16a9", evalCtx)
 	if err != nil {
 		fmt.Printf("   Error: %v\n\n", err)
 	} else {
