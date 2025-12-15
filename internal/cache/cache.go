@@ -151,22 +151,20 @@ func (c *Cache) EvaluateBool(ctx context.Context, flagKey string, evalCtx domain
 		return false
 	}
 
-	// Decodifica attachment["value"] ou attachment["enabled"]
 	if result.VariantAttachment != nil {
-		for _, key := range []string{"enabled", "value"} {
-			raw, ok := result.VariantAttachment[key]
-			if !ok {
-				continue
-			}
-
-			var b bool
-			if err := json.Unmarshal(raw, &b); err == nil {
-				return b
+		for _, key := range []string{"value", "enabled"} {
+			if raw, ok := result.VariantAttachment[key]; ok {
+				var b bool
+				if err := json.Unmarshal(raw, &b); err == nil {
+					if b == true {
+						return b
+					}
+				}
 			}
 		}
 	}
 
-	// Fallback usando VariantKey
+	// Fallback using VariantKey
 	return result.VariantKey == "enabled" ||
 		result.VariantKey == "on" ||
 		result.VariantKey == "true"
