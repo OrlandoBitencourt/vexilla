@@ -52,6 +52,7 @@ type FlagrDistribuitions struct {
 }
 
 func randomKey(base string) string {
+	return base
 	b := make([]byte, 4)
 	rand.Read(b)
 	return fmt.Sprintf("%s-%x", base, b)

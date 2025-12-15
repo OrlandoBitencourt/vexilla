@@ -33,7 +33,7 @@ func ExampleTestBasic() {
 		WithAttribute("country", "BR").
 		WithAttribute("tier", "premium")
 
-	enabled := client.Bool(ctx, "new_feature-55e78f0d", evalCtx)
+	enabled := client.Bool(ctx, "new_feature", evalCtx)
 	fmt.Printf("Feature enabled: %v\n", enabled)
 
 	// Evaluate a string flag
