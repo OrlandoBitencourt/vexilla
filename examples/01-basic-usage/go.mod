@@ -1,8 +1,8 @@
-module basic-usage
+module main
 
 go 1.25.4
 
-require github.com/OrlandoBitencourt/vexilla v1.0.19
+require github.com/OrlandoBitencourt/vexilla v1.0.20
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

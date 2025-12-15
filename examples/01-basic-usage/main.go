@@ -1,5 +1,3 @@
-// examples/01-basic-usage/main.go
-// Basic example showing simple flag evaluation
 package main
 
 import (
@@ -8,118 +6,152 @@ import (
 	"log"
 	"time"
 
-	"github.com/OrlandoBitencourt/vexilla/pkg/cache"
-	"github.com/OrlandoBitencourt/vexilla/pkg/domain"
-	"github.com/OrlandoBitencourt/vexilla/pkg/evaluator"
-	"github.com/OrlandoBitencourt/vexilla/pkg/flagr"
-	"github.com/OrlandoBitencourt/vexilla/pkg/storage"
+	"github.com/OrlandoBitencourt/vexilla"
 )
 
-func main() {
-	fmt.Println("=== Example 1: Basic Flag Usage ===")
-
-	// Create Flagr client
-	flagrClient := flagr.NewHTTPClient(flagr.Config{
-		Endpoint:   "http://localhost:18000",
-		Timeout:    5 * time.Second,
-		MaxRetries: 3,
-	})
-
-	// Create memory storage
-	memStorage, err := storage.NewMemoryStorage(storage.DefaultConfig())
-	if err != nil {
-		log.Fatalf("Failed to create storage: %v", err)
-	}
-
-	// Create evaluator
-	eval := evaluator.New()
-
-	// Create cache with options
-	c, err := cache.New(
-		cache.WithFlagrClient(flagrClient),
-		cache.WithStorage(memStorage),
-		cache.WithEvaluator(eval),
-		cache.WithRefreshInterval(5*time.Minute),
-		cache.WithOnlyEnabled(true), // Only cache enabled flags
+// ExampleTestBasic demonstrates basic Vexilla usage.
+func ExampleTestBasic() {
+	// Create a new Vexilla client
+	client, err := vexilla.New(
+		vexilla.WithFlagrEndpoint("http://localhost:18000"),
+		vexilla.WithRefreshInterval(5*time.Minute),
+		vexilla.WithOnlyEnabled(true),
 	)
 	if err != nil {
-		log.Fatalf("Failed to create cache: %v", err)
+		log.Fatal(err)
 	}
 
-	// Start the cache
+	// Start the client
 	ctx := context.Background()
-	if err := c.Start(ctx); err != nil {
-		log.Fatalf("Failed to start cache: %v", err)
+	if err := client.Start(ctx); err != nil {
+		log.Fatal(err)
 	}
-	defer c.Stop()
+	defer client.Stop()
 
-	// Wait for initial load
-	time.Sleep(1 * time.Second)
+	// Evaluate a boolean flag
+	evalCtx := vexilla.NewContext("user-123").
+		WithAttribute("country", "BR").
+		WithAttribute("tier", "premium")
 
-	// Example 1: Boolean flag evaluation
-	fmt.Println("1. Boolean Flag Evaluation")
-	fmt.Println("   Flag: new_feature")
+	enabled := client.Bool(ctx, "new_feature-55e78f0d", evalCtx)
+	fmt.Printf("Feature enabled: %v\n", enabled)
 
-	evalCtx := domain.EvaluationContext{
-		EntityID: "user_123",
-		Context: map[string]interface{}{
-			"country": "BR",
-			"tier":    "premium",
-		},
+	// Evaluate a string flag
+	theme := client.String(ctx, "ui-theme", evalCtx, "light")
+	fmt.Printf("Theme: %s\n", theme)
+
+	// Get detailed evaluation result
+	result, err := client.Evaluate(ctx, "new-feature", evalCtx)
+	if err == nil {
+		fmt.Printf("Variant: %s, Reason: %s\n", result.VariantKey, result.EvaluationReason)
 	}
+}
 
-	enabled := c.EvaluateBool(ctx, "new_feature-55e78f0d", evalCtx)
-	fmt.Printf("   Result: %v\n\n", enabled)
-
-	// Example 2: String flag evaluation
-	fmt.Println("2. String Flag Evaluation")
-	fmt.Println("   Flag: ui_theme")
-
-	theme := c.EvaluateString(ctx, "ui_theme-37354167", evalCtx, "light")
-	fmt.Printf("   Theme: %s\n\n", theme)
-
-	// Example 3: Integer flag evaluation
-	fmt.Println("3. Integer Flag Evaluation")
-	fmt.Println("   Flag: max_items")
-
-	maxItems := c.EvaluateInt(ctx, "max_items-23ee28c9", evalCtx, 10)
-	fmt.Printf("   Max Items: %d\n\n", maxItems)
-
-	// Example 4: Full evaluation with details
-	fmt.Println("4. Full Evaluation with Details")
-	fmt.Println("   Flag: brazil_launch")
-
-	result, err := c.Evaluate(ctx, "brazil_launch-91ca16a9", evalCtx)
+// ExampleTestMicroservice demonstrates Vexilla usage in a microservice.
+func ExampleTestMicroservice() {
+	// In a microservice, filter flags by service tag to reduce memory usage
+	client, err := vexilla.New(
+		vexilla.WithFlagrEndpoint("http://localhost:18000"),
+		vexilla.WithServiceTag("user-service"),
+		vexilla.WithOnlyEnabled(true),
+		vexilla.WithAdditionalTags([]string{"production"}, "any"),
+	)
 	if err != nil {
-		fmt.Printf("   Error: %v\n\n", err)
-	} else {
-		fmt.Printf("   Flag Key: %s\n", result.FlagKey)
-		fmt.Printf("   Variant: %s\n", result.VariantKey)
-		fmt.Printf("   Reason: %s\n\n", result.EvaluationReason)
+		log.Fatal(err)
 	}
 
-	// Example 5: Different user context
-	fmt.Println("5. Evaluation with Different User")
+	ctx := context.Background()
+	if err := client.Start(ctx); err != nil {
+		log.Fatal(err)
+	}
+	defer client.Stop()
 
-	usEvalCtx := domain.EvaluationContext{
-		EntityID: "user_456",
-		Context: map[string]interface{}{
-			"country": "US",
-			"tier":    "free",
-		},
+	// This will only evaluate flags tagged with "user-service"
+	evalCtx := vexilla.NewContext("user-123")
+	enabled := client.Bool(ctx, "user-service-feature", evalCtx)
+
+	fmt.Printf("Feature enabled: %v\n", enabled)
+}
+
+// ExampleTestWithConfig demonstrates using a Config struct.
+func ExampleTestWithConfig() {
+	cfg := vexilla.DefaultConfig()
+	cfg.Flagr.Endpoint = "http://localhost:18000"
+	cfg.Cache.RefreshInterval = 10 * time.Minute
+	cfg.Cache.Filter.OnlyEnabled = true
+	cfg.Cache.Filter.ServiceName = "payment-service"
+	cfg.Cache.Filter.RequireServiceTag = true
+
+	client, err := vexilla.New(vexilla.WithConfig(cfg))
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	usEnabled := c.EvaluateBool(ctx, "brazil_launch", usEvalCtx)
-	fmt.Printf("   US User - Brazil Launch: %v\n\n", usEnabled)
+	ctx := context.Background()
+	if err := client.Start(ctx); err != nil {
+		log.Fatal(err)
+	}
+	defer client.Stop()
 
-	// Show cache statistics
-	fmt.Println("6. Cache Statistics")
-	metrics := c.GetMetrics()
-	fmt.Printf("   Storage Metrics:\n")
-	fmt.Printf("     Keys Added: %d\n", metrics.Storage.KeysAdded)
-	fmt.Printf("     Gets Kept: %d\n", metrics.Storage.GetsKept)
-	fmt.Printf("     Hit Ratio: %.2f%%\n", metrics.Storage.HitRatio*100)
-	fmt.Printf("   Last Refresh: %s\n", metrics.LastRefresh.Format(time.RFC3339))
+	// Use the client...
+}
 
-	fmt.Println("\n✅ Example completed successfully!")
+// ExampleTestmetrics demonstrates accessing cache metrics.
+func ExampleTestMetrics() {
+	client, _ := vexilla.New(
+		vexilla.WithFlagrEndpoint("http://localhost:18000"),
+	)
+
+	ctx := context.Background()
+	client.Start(ctx)
+	defer client.Stop()
+
+	// Get metrics
+	metrics := client.Metrics()
+
+	fmt.Printf("Keys Added: %d\n", metrics.Storage.KeysAdded)
+	fmt.Printf("Hit Ratio: %.2f%%\n", metrics.Storage.HitRatio*100)
+	fmt.Printf("Last Refresh: %s\n", metrics.LastRefresh.Format(time.RFC3339))
+	fmt.Printf("Circuit Open: %v\n", metrics.CircuitOpen)
+}
+
+// ExampleTestComplexEvaluation demonstrates using detailed evaluation results.
+func ExampleTestComplexEvaluation() {
+	client, _ := vexilla.New(
+		vexilla.WithFlagrEndpoint("http://localhost:18000"),
+	)
+
+	ctx := context.Background()
+	client.Start(ctx)
+	defer client.Stop()
+
+	evalCtx := vexilla.NewContext("user-456").
+		WithAttribute("country", "US").
+		WithAttribute("age", 25)
+
+	result, err := client.Evaluate(ctx, "ab-test-flag", evalCtx)
+	if err != nil {
+		log.Printf("Evaluation failed: %v", err)
+		return
+	}
+
+	// Check if enabled
+	if result.IsEnabled() {
+		fmt.Println("Feature is enabled")
+	}
+
+	// Get custom values from variant attachment
+	tier := result.GetString("tier", "free")
+	maxItems := result.GetInt("maxTestitems", 10)
+
+	fmt.Printf("Tier: %s, Max Items: %d\n", tier, maxItems)
+}
+
+func main() {
+	fmt.Println("running vexila basic-usage examples")
+	ExampleTestBasic()
+	ExampleTestMicroservice()
+	ExampleTestWithConfig()
+	ExampleTestMetrics()
+	ExampleTestComplexEvaluation()
 }
