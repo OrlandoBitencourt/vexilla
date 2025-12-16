@@ -1,0 +1,12 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+
+ignore:
+  - "examples/**"
+  - "**/*_mock.go"
+  - "**/mock/**"
+  - "**/internal/testutil/**"
+  - "**/*noop.go"
