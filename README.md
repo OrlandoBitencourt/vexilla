@@ -35,7 +35,7 @@ Vexilla is a **high-performance caching layer** for [Flagr](https://github.com/o
 go get github.com/OrlandoBitencourt/vexilla
 ```
 
-### Basic Usage (v2 API)
+### Basic Usage 
 
 ```go
 package main
