@@ -316,7 +316,6 @@ for req := range requests {
 
 ## 📚 Documentation
 
-- **[Migration Guide](MIGRATION.md)** - Migrating from v1 to v2
 - **[Architecture Guide](ARCHITECTURE.md)** - Deep dive into design
 - **[API Reference](https://pkg.go.dev/github.com/OrlandoBitencourt/vexilla)** - Complete API docs
 - **[Examples](examples/)** - Working code samples
@@ -373,41 +372,6 @@ MIT License - see [LICENSE](LICENSE) for details
 - [**Ristretto**](https://github.com/dgraph-io/ristretto) by DGraph - High-performance cache
 - [**expr**](https://github.com/expr-lang/expr) by Anton Medvedev - Expression evaluation
 - [**OpenTelemetry**](https://opentelemetry.io/) - Observability framework
-
----
-
-## 🆕 What's New in v2?
-
-### Unified Facade API
-
-**Before (v1):**
-```go
-import (
-    "github.com/OrlandoBitencourt/vexilla/pkg/cache"
-    "github.com/OrlandoBitencourt/vexilla/pkg/evaluator"
-    "github.com/OrlandoBitencourt/vexilla/pkg/flagr"
-    "github.com/OrlandoBitencourt/vexilla/pkg/storage"
-)
-```
-
-**After (v2):**
-```go
-import "github.com/OrlandoBitencourt/vexilla"
-```
-
-### Cleaner API
-
-- `cache.EvaluateBool()` → `client.Bool()`
-- `cache.EvaluateString()` → `client.String()`
-- `cache.EvaluateInt()` → `client.Int()`
-
-### Better Configuration
-
-- Functional options pattern
-- Sensible defaults
-- Simplified setup
-
-See [MIGRATION.md](MIGRATION.md) for the complete migration guide.
 
 ---
 
