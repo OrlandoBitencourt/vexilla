@@ -69,21 +69,17 @@ func New(opts ...Option) (*Cache, error) {
 func (c *Cache) Start(ctx context.Context) error {
 	c.ctx, c.cancel = context.WithCancel(ctx)
 
-	// Initial load from Flagr
 	loadCtx, cancel := context.WithTimeout(c.ctx, c.config.InitialTimeout)
 	defer cancel()
 
 	if err := c.refreshFlags(loadCtx); err != nil {
-		// Try to load from disk if available
 		if diskStorage, ok := c.storage.(*storage.DiskStorage); ok {
 			snapshot, loadErr := diskStorage.LoadSnapshot(loadCtx)
 			if loadErr == nil && len(snapshot) > 0 {
-				// Load from disk succeeded
 				for key, flag := range snapshot {
 					c.storage.Set(loadCtx, key, flag, 0)
 				}
 			} else {
-				// Both Flagr and disk failed
 				return fmt.Errorf("initial flag load failed and no disk cache available: %w", err)
 			}
 		} else {
@@ -91,13 +87,22 @@ func (c *Cache) Start(ctx context.Context) error {
 		}
 	}
 
-	// Start background refresh
 	if c.config.RefreshInterval > 0 {
 		c.wg.Add(1)
 		go c.refreshLoop()
 	}
 
 	return nil
+}
+
+func (c *Cache) Sync(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	return c.refreshFlags(ctx)
 }
 
 // Stop gracefully stops the cache

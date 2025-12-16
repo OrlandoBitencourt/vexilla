@@ -4,6 +4,7 @@ package vexilla
 
 import (
 	"context"
+	"errors"
 
 	"github.com/OrlandoBitencourt/vexilla/internal/cache"
 	"github.com/OrlandoBitencourt/vexilla/internal/domain"
@@ -47,7 +48,18 @@ func New(opts ...Option) (*Client, error) {
 // Start initializes the client and begins background processes.
 // This must be called before evaluating flags.
 func (c *Client) Start(ctx context.Context) error {
-	return c.cache.Start(ctx)
+	err := c.cache.Start(ctx)
+	if err != nil {
+		return err
+	}
+	return c.cache.Sync(ctx)
+}
+
+func (c *Client) Sync(ctx context.Context) error {
+	if c.cache == nil {
+		return errors.New("vexilla client sync - cache not initialized")
+	}
+	return c.cache.Sync(ctx)
 }
 
 // Stop gracefully shuts down the client and its background processes.

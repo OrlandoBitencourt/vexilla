@@ -2,6 +2,7 @@ package vexilla
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -66,20 +67,35 @@ func (r *Result) IsEnabled() bool {
 			r.VariantKey == "true"
 	}
 
-	// Try "enabled" key
-	if raw, ok := r.VariantAttachment["enabled"]; ok {
-		var v bool
-		if err := json.Unmarshal(raw, &v); err == nil {
-			return v
-		}
+	if isTrue(r.VariantAttachment["enabled"]) {
+		return true
 	}
 
-	// Try "value" key
-	if raw, ok := r.VariantAttachment["value"]; ok {
-		var v bool
-		if err := json.Unmarshal(raw, &v); err == nil {
-			return v
+	if isTrue(r.VariantAttachment["value"]) {
+		return true
+	}
+
+	return false
+}
+
+func isTrue(raw json.RawMessage) bool {
+	if raw == nil {
+		return false
+	}
+	var b bool
+	if err := json.Unmarshal(raw, &b); err == nil {
+		return b
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		switch strings.ToLower(s) {
+		case "true", "on", "enabled", "1", "yes":
+			return true
 		}
+	}
+	var n int
+	if err := json.Unmarshal(raw, &n); err == nil {
+		return n == 1
 	}
 
 	return false
