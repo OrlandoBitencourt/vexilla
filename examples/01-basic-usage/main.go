@@ -1,3 +1,4 @@
+// Package main demonstrates basic Vexilla usage with the new facade API.
 package main
 
 import (
@@ -9,149 +10,121 @@ import (
 	"github.com/OrlandoBitencourt/vexilla"
 )
 
-// ExampleTestBasic demonstrates basic Vexilla usage.
-func ExampleTestBasic() {
-	// Create a new Vexilla client
+func main() {
+	fmt.Println("🏴 Vexilla Basic Example")
+	fmt.Println("=" + repeat("=", 50))
+
+	// Create a new Vexilla client with simple configuration
 	client, err := vexilla.New(
 		vexilla.WithFlagrEndpoint("http://localhost:18000"),
 		vexilla.WithRefreshInterval(5*time.Minute),
 		vexilla.WithOnlyEnabled(true),
 	)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Start the client
+	// Start the client (loads flags and begins background refresh)
 	ctx := context.Background()
 	if err := client.Start(ctx); err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to start client: %v", err)
 	}
 	defer client.Stop()
 
-	// Evaluate a boolean flag
+	fmt.Println("✅ Client started successfully")
+	fmt.Println()
+
+	// Example 1: Boolean flag evaluation
+	fmt.Println("Example 1: Boolean Flag")
+	fmt.Println("-" + repeat("-", 50))
+
 	evalCtx := vexilla.NewContext("user-123").
 		WithAttribute("country", "BR").
 		WithAttribute("tier", "premium")
 
-	enabled := client.Bool(ctx, "new_feature", evalCtx)
-	fmt.Printf("Feature enabled: %v\n", enabled)
+	enabled := client.Bool(ctx, "new-checkout", evalCtx)
+	fmt.Printf("Flag: new-checkout\n")
+	fmt.Printf("User: user-123 (country=BR, tier=premium)\n")
+	fmt.Printf("Result: %v\n", enabled)
+	fmt.Println()
 
-	// Evaluate a string flag
+	// Example 2: String flag evaluation
+	fmt.Println("Example 2: String Flag")
+	fmt.Println("-" + repeat("-", 50))
+
 	theme := client.String(ctx, "ui-theme", evalCtx, "light")
-	fmt.Printf("Theme: %s\n", theme)
+	fmt.Printf("Flag: ui-theme\n")
+	fmt.Printf("Result: %s\n", theme)
+	fmt.Println()
 
-	// Get detailed evaluation result
-	result, err := client.Evaluate(ctx, "new-feature", evalCtx)
-	if err == nil {
-		fmt.Printf("Variant: %s, Reason: %s\n", result.VariantKey, result.EvaluationReason)
-	}
-}
+	// Example 3: Integer flag evaluation
+	fmt.Println("Example 3: Integer Flag")
+	fmt.Println("-" + repeat("-", 50))
 
-// ExampleTestMicroservice demonstrates Vexilla usage in a microservice.
-func ExampleTestMicroservice() {
-	// In a microservice, filter flags by service tag to reduce memory usage
-	client, err := vexilla.New(
-		vexilla.WithFlagrEndpoint("http://localhost:18000"),
-		vexilla.WithServiceTag("user-service"),
-		vexilla.WithOnlyEnabled(true),
-		vexilla.WithAdditionalTags([]string{"production"}, "any"),
-	)
+	maxItems := client.Int(ctx, "max-items", evalCtx, 10)
+	fmt.Printf("Flag: max-items\n")
+	fmt.Printf("Result: %d\n", maxItems)
+	fmt.Println()
+
+	// Example 4: Detailed evaluation
+	fmt.Println("Example 4: Detailed Evaluation")
+	fmt.Println("-" + repeat("-", 50))
+
+	result, err := client.Evaluate(ctx, "new-checkout", evalCtx)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("Evaluation failed: %v\n", err)
+	} else {
+		fmt.Printf("Flag Key: %s\n", result.FlagKey)
+		fmt.Printf("Variant: %s\n", result.VariantKey)
+		fmt.Printf("Reason: %s\n", result.EvaluationReason)
+		fmt.Printf("Is Enabled: %v\n", result.IsEnabled())
+	}
+	fmt.Println()
+
+	// Example 5: Different user contexts
+	fmt.Println("Example 5: Different User Contexts")
+	fmt.Println("-" + repeat("-", 50))
+
+	users := []struct {
+		id      string
+		country string
+		tier    string
+	}{
+		{"user-001", "BR", "premium"},
+		{"user-002", "US", "free"},
+		{"user-003", "BR", "free"},
 	}
 
-	ctx := context.Background()
-	if err := client.Start(ctx); err != nil {
-		log.Fatal(err)
+	for _, u := range users {
+		ctx := vexilla.NewContext(u.id).
+			WithAttribute("country", u.country).
+			WithAttribute("tier", u.tier)
+
+		enabled := client.Bool(context.Background(), "new-checkout", ctx)
+		fmt.Printf("%s (country=%s, tier=%s): %v\n", u.id, u.country, u.tier, enabled)
 	}
-	defer client.Stop()
+	fmt.Println()
 
-	// This will only evaluate flags tagged with "user-service"
-	evalCtx := vexilla.NewContext("user-123")
-	enabled := client.Bool(ctx, "user-service-feature", evalCtx)
+	// Example 6: Cache metrics
+	fmt.Println("Example 6: Cache Metrics")
+	fmt.Println("-" + repeat("-", 50))
 
-	fmt.Printf("Feature enabled: %v\n", enabled)
-}
-
-// ExampleTestWithConfig demonstrates using a Config struct.
-func ExampleTestWithConfig() {
-	cfg := vexilla.DefaultConfig()
-	cfg.Flagr.Endpoint = "http://localhost:18000"
-	cfg.Cache.RefreshInterval = 10 * time.Minute
-	cfg.Cache.Filter.OnlyEnabled = true
-	cfg.Cache.Filter.ServiceName = "payment-service"
-	cfg.Cache.Filter.RequireServiceTag = true
-
-	client, err := vexilla.New(vexilla.WithConfig(cfg))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	ctx := context.Background()
-	if err := client.Start(ctx); err != nil {
-		log.Fatal(err)
-	}
-	defer client.Stop()
-
-	// Use the client...
-}
-
-// ExampleTestmetrics demonstrates accessing cache metrics.
-func ExampleTestMetrics() {
-	client, _ := vexilla.New(
-		vexilla.WithFlagrEndpoint("http://localhost:18000"),
-	)
-
-	ctx := context.Background()
-	client.Start(ctx)
-	defer client.Stop()
-
-	// Get metrics
 	metrics := client.Metrics()
-
 	fmt.Printf("Keys Added: %d\n", metrics.Storage.KeysAdded)
+	fmt.Printf("Keys Evicted: %d\n", metrics.Storage.KeysEvicted)
 	fmt.Printf("Hit Ratio: %.2f%%\n", metrics.Storage.HitRatio*100)
 	fmt.Printf("Last Refresh: %s\n", metrics.LastRefresh.Format(time.RFC3339))
 	fmt.Printf("Circuit Open: %v\n", metrics.CircuitOpen)
+	fmt.Printf("Consecutive Fails: %d\n", metrics.ConsecutiveFails)
+
+	fmt.Println()
+	fmt.Println("✅ Example completed successfully!")
 }
 
-// ExampleTestComplexEvaluation demonstrates using detailed evaluation results.
-func ExampleTestComplexEvaluation() {
-	client, _ := vexilla.New(
-		vexilla.WithFlagrEndpoint("http://localhost:18000"),
-	)
-
-	ctx := context.Background()
-	client.Start(ctx)
-	defer client.Stop()
-
-	evalCtx := vexilla.NewContext("user-456").
-		WithAttribute("country", "US").
-		WithAttribute("age", 25)
-
-	result, err := client.Evaluate(ctx, "ab-test-flag", evalCtx)
-	if err != nil {
-		log.Printf("Evaluation failed: %v", err)
-		return
+func repeat(s string, count int) string {
+	result := ""
+	for i := 0; i < count; i++ {
+		result += s
 	}
-
-	// Check if enabled
-	if result.IsEnabled() {
-		fmt.Println("Feature is enabled")
-	}
-
-	// Get custom values from variant attachment
-	tier := result.GetString("tier", "free")
-	maxItems := result.GetInt("maxTestitems", 10)
-
-	fmt.Printf("Tier: %s, Max Items: %d\n", tier, maxItems)
-}
-
-func main() {
-	fmt.Println("running vexila basic-usage examples")
-	ExampleTestBasic()
-	ExampleTestMicroservice()
-	ExampleTestWithConfig()
-	ExampleTestMetrics()
-	ExampleTestComplexEvaluation()
+	return result
 }

@@ -27,55 +27,68 @@ Vexilla is a **high-performance caching layer** for [Flagr](https://github.com/o
 
 ---
 
-## 🤔 Why Vexilla?
+## 🚀 Quick Start
 
-### The Problem with Flagr
+### Installation
 
-[Flagr](https://github.com/openflagr/flagr) is excellent for feature flagging with:
-- ✅ Powerful A/B testing with consistent bucketing
-- ✅ Dynamic configuration management
-- ✅ Clean REST API and UI
-- ✅ Segment-based targeting
-
-**However**, every flag evaluation requires an HTTP request (50-200ms latency).
-
-**At scale:**
-- 10,000 requests/second = 10,000 HTTP calls to Flagr
-- Flagr becomes a bottleneck
-- Infrastructure costs increase
-- Latency accumulates
-
-### The Vexilla Solution
-
-Vexilla solves this by **intelligently caching** flag definitions and **routing evaluation**:
-
-**Key Insight:** Most flags are **deterministic** (e.g., `country == "BR"`). These don't need Flagr's stateful bucketing - they can be evaluated locally in <1ms with zero HTTP requests.
-
-Only flags with **percentage-based rollouts** or **A/B testing** require Flagr's consistent hashing.
-
+```bash
+go get github.com/OrlandoBitencourt/vexilla
 ```
-┌─────────────────────────────────────────┐
-│  Your Application (10K req/s)           │
-└──────────────┬──────────────────────────┘
-               │
-               ▼
-┌──────────────────────────────────────────┐
-│           Vexilla Cache                  │
-│  • In-memory cache (Ristretto)          │
-│  • Smart local/remote routing            │
-│  • <1ms for deterministic flags          │
-│  • Optional flag filtering               │
-└──────────────┬───────────────────────────┘
-               │
-        Only when needed
-               │
-               ▼
-┌──────────────────────────────────────────┐
-│      Flagr Server                        │
-│  • A/B tests (consistent hash)           │
-│  • Percentage rollouts                   │
-│  • Complex variant assignments           │
-└──────────────────────────────────────────┘
+
+### Basic Usage (v2 API)
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "time"
+
+    "github.com/OrlandoBitencourt/vexilla"
+)
+
+func main() {
+    // Create client with simple configuration
+    client, err := vexilla.New(
+        vexilla.WithFlagrEndpoint("http://localhost:18000"),
+        vexilla.WithRefreshInterval(5 * time.Minute),
+        vexilla.WithOnlyEnabled(true),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Start the client
+    ctx := context.Background()
+    if err := client.Start(ctx); err != nil {
+        log.Fatal(err)
+    }
+    defer client.Stop()
+
+    // Evaluate a flag
+    evalCtx := vexilla.NewContext("user-123").
+        WithAttribute("country", "BR").
+        WithAttribute("tier", "premium")
+
+    enabled := client.Bool(ctx, "new-feature", evalCtx)
+    log.Printf("Feature enabled: %v", enabled)
+}
+```
+
+### Microservice Usage (with filtering)
+
+```go
+// Filter flags by service tag to reduce memory usage
+client, err := vexilla.New(
+    vexilla.WithFlagrEndpoint("http://localhost:18000"),
+    vexilla.WithServiceTag("user-service"),      // Only cache flags tagged "user-service"
+    vexilla.WithOnlyEnabled(true),               // Only cache enabled flags
+    vexilla.WithAdditionalTags([]string{"production"}, "any"), // Environment filtering
+)
+
+// With 10,000 total flags but only 50 for user-service:
+// Memory usage: ~10MB → ~500KB (95% reduction!)
 ```
 
 ---
@@ -93,7 +106,7 @@ Only flags with **percentage-based rollouts** or **A/B testing** require Flagr's
 - **OnlyEnabled filter** - Cache only enabled flags
 - **Service-based filtering** - Cache only flags tagged for your service
 - **Tag-based filtering** - Filter by environment (production, staging)
-- **Memory savings** - Reduce memory footprint in microservice environments
+- **Memory savings** - Reduce memory footprint by 90-95% in microservices
 
 ### 🔔 Real-time Updates
 - **Webhook support** - Instant flag updates from Flagr
@@ -112,93 +125,106 @@ Only flags with **percentage-based rollouts** or **A/B testing** require Flagr's
 
 ---
 
-## 🚀 Quick Start
+## 📖 API Examples
 
-### Installation
-
-```bash
-go get github.com/OrlandoBitencourt/vexilla
-```
-
-### Basic Usage
+### Boolean Flag
 
 ```go
-package main
+enabled := client.Bool(ctx, "new-feature", evalCtx)
+```
 
-import (
-    "context"
-    "log"
-    "time"
+### String Flag
 
-    "github.com/OrlandoBitencourt/vexilla/pkg/cache"
-    "github.com/OrlandoBitencourt/vexilla/pkg/domain"
-    "github.com/OrlandoBitencourt/vexilla/pkg/evaluator"
-    "github.com/OrlandoBitencourt/vexilla/pkg/flagr"
-    "github.com/OrlandoBitencourt/vexilla/pkg/storage"
-)
+```go
+theme := client.String(ctx, "ui-theme", evalCtx, "light")
+```
 
-func main() {
-    // 1. Create dependencies
-    flagrClient := flagr.NewHTTPClient(flagr.Config{
-        Endpoint:   "http://localhost:18000",
-        Timeout:    5 * time.Second,
-        MaxRetries: 3,
-    })
+### Integer Flag
 
-    memStorage, _ := storage.NewMemoryStorage(storage.DefaultConfig())
-    eval := evaluator.New()
+```go
+maxItems := client.Int(ctx, "max-items", evalCtx, 10)
+```
 
-    // 2. Create cache with options
-    c, err := cache.New(
-        cache.WithFlagrClient(flagrClient),
-        cache.WithStorage(memStorage),
-        cache.WithEvaluator(eval),
-        cache.WithRefreshInterval(5 * time.Minute),
-        cache.WithOnlyEnabled(true), // 🔥 Filter disabled flags
-    )
-    if err != nil {
-        log.Fatal(err)
-    }
+### Detailed Evaluation
 
-    // 3. Start cache
-    ctx := context.Background()
-    if err := c.Start(ctx); err != nil {
-        log.Fatal(err)
-    }
-    defer c.Stop()
-
-    // 4. Evaluate flags
-    evalCtx := domain.EvaluationContext{
-        EntityID: "user_123",
-        Context: map[string]interface{}{
-            "country": "BR",
-            "tier":    "premium",
-        },
-    }
-
-    // Boolean evaluation
-    enabled := c.EvaluateBool(ctx, "my-feature", evalCtx)
-    log.Printf("Feature enabled: %v", enabled)
-
-    // String evaluation
-    theme := c.EvaluateString(ctx, "ui-theme", evalCtx, "light")
-    log.Printf("Theme: %s", theme)
-
-    // Full evaluation with details
-    result, _ := c.Evaluate(ctx, "my-feature", evalCtx)
-    log.Printf("Result: %+v", result)
+```go
+result, err := client.Evaluate(ctx, "ab-test", evalCtx)
+if err == nil {
+    fmt.Printf("Variant: %s\n", result.VariantKey)
+    fmt.Printf("Reason: %s\n", result.EvaluationReason)
+    
+    // Access custom variant data
+    tier := result.GetString("tier", "free")
+    limit := result.GetInt("limit", 100)
 }
 ```
 
-### Simple Configuration (One-liner)
+### Fluent Context Building
 
 ```go
-c, err := cache.NewSimple(cache.SimpleConfig{
-    FlagrEndpoint:   "http://localhost:18000",
-    RefreshInterval: 5 * time.Minute,
-    OnlyEnabled:     true,
-    ServiceName:     "user-service", // Filter by service tag
-})
+evalCtx := vexilla.NewContext("user-456").
+    WithAttribute("country", "US").
+    WithAttribute("tier", "premium").
+    WithAttribute("age", 25).
+    WithEntityType("user")
+```
+
+---
+
+## 🔧 Configuration Options
+
+### Flagr Connection
+
+```go
+vexilla.WithFlagrEndpoint("http://localhost:18000")
+vexilla.WithFlagrAPIKey("your-api-key")
+vexilla.WithFlagrTimeout(5 * time.Second)
+vexilla.WithFlagrMaxRetries(3)
+```
+
+### Cache Behavior
+
+```go
+vexilla.WithRefreshInterval(5 * time.Minute)
+vexilla.WithInitialTimeout(10 * time.Second)
+```
+
+### Fallback Strategy
+
+```go
+vexilla.WithFallbackStrategy("fail_closed")  // Options: fail_open, fail_closed, error
+```
+
+### Circuit Breaker
+
+```go
+vexilla.WithCircuitBreaker(3, 30*time.Second)  // threshold, timeout
+```
+
+### Flag Filtering (Memory Optimization)
+
+```go
+// Only cache enabled flags
+vexilla.WithOnlyEnabled(true)
+
+// Only cache flags tagged for this service
+vexilla.WithServiceTag("user-service")
+
+// Only cache flags with specific tags
+vexilla.WithAdditionalTags([]string{"production", "critical"}, "any")
+```
+
+### Using a Config Struct
+
+```go
+cfg := vexilla.DefaultConfig()
+cfg.Flagr.Endpoint = "http://localhost:18000"
+cfg.Cache.RefreshInterval = 10 * time.Minute
+cfg.Cache.Filter.OnlyEnabled = true
+cfg.Cache.Filter.ServiceName = "payment-service"
+cfg.Cache.Filter.RequireServiceTag = true
+
+client, err := vexilla.New(vexilla.WithConfig(cfg))
 ```
 
 ---
@@ -214,21 +240,7 @@ Vexilla automatically determines the best evaluation strategy:
 - Single distribution with `percentage: 100`
 - Deterministic constraints only
 
-**Example:**
-```json
-{
-  "key": "premium_users",
-  "segments": [{
-    "rollout_percent": 100,
-    "constraints": [
-      {"property": "tier", "operator": "EQ", "value": "premium"}
-    ],
-    "distributions": [{"variant_key": "enabled", "percentage": 100}]
-  }]
-}
-```
-
-✅ **Evaluated locally** - Same inputs always produce same outputs
+**Performance:** <1ms, 0 HTTP requests
 
 ### ❌ Flagr Evaluation (Dynamic Flags)
 
@@ -237,195 +249,29 @@ Vexilla automatically determines the best evaluation strategy:
 - Multiple distributions (A/B test)
 - Single distribution with `percentage < 100`
 
-**Example:**
-```json
-{
-  "key": "gradual_rollout",
-  "segments": [{
-    "rollout_percent": 30,  // ❌ Only 30% of users
-    "distributions": [{"variant_key": "enabled", "percentage": 100}]
-  }]
-}
-```
-
-❌ **Requires Flagr** - Needs consistent hashing for sticky behavior
+**Performance:** 50-200ms, 1 HTTP request (in a real world scenario where we have lots of services hitting flagr it can take >1s to evaluate).
 
 ---
 
-## 🔧 Configuration
-
-### Full Configuration
+## 📊 Monitoring & Metrics
 
 ```go
-config := cache.Config{
-    // Refresh behavior
-    RefreshInterval: 5 * time.Minute,
-    InitialTimeout:  10 * time.Second,
-    
-    // Fallback strategy
-    FallbackStrategy: "fail_closed", // or "fail_open", "error"
-    
-    // Circuit breaker
-    CircuitBreakerThreshold: 3,
-    CircuitBreakerTimeout:   30 * time.Second,
-    
-    // 🔥 Flag Filtering (Resource Optimization)
-    FilterConfig: cache.FilterConfig{
-        OnlyEnabled:       true,              // Cache only enabled flags
-        ServiceName:       "user-service",    // Your service name
-        RequireServiceTag: true,              // Only flags tagged for this service
-        AdditionalTags:    []string{"production"}, // Environment filter
-        TagMatchMode:      "any",             // "any" or "all"
-    },
-}
+metrics := client.Metrics()
 
-c, err := cache.New(
-    cache.WithConfig(config),
-    // ... other options
-)
-```
-
-### Filter Configuration Examples
-
-#### Example 1: Filter by Service (Microservices)
-
-```go
-// Only cache flags tagged with "user-service"
-c, err := cache.New(
-    // ... dependencies
-    cache.WithServiceTag("user-service", true),
-    cache.WithOnlyEnabled(true),
-)
-
-// Memory savings: If you have 1000 flags but only 50 are for "user-service"
-// You save: ~950 KB of memory (95% reduction)
-```
-
-#### Example 2: Filter by Environment
-
-```go
-// Only cache production flags
-c, err := cache.New(
-    // ... dependencies
-    cache.WithAdditionalTags([]string{"production"}, "any"),
-    cache.WithOnlyEnabled(true),
-)
-```
-
-#### Example 3: Combined Filtering
-
-```go
-// Only cache enabled production flags for user-service
-c, err := cache.New(
-    // ... dependencies
-    cache.WithOnlyEnabled(true),
-    cache.WithServiceTag("user-service", true),
-    cache.WithAdditionalTags([]string{"production"}, "all"),
-)
-```
-
----
-
-## 🎯 Advanced Features
-
-### Webhook Integration
-
-```go
-// Start webhook server for real-time updates
-webhook := server.NewWebhookServer(c, 8081, "webhook-secret")
-go webhook.Start()
-
-// Flagr sends webhooks on flag updates:
-// POST /webhook
-// {
-//   "event": "flag.updated",
-//   "flag_keys": ["my-feature"]
-// }
-```
-
-### Admin API
-
-```go
-// Start admin server
-admin := server.NewAdminServer(c, 8082)
-go admin.Start()
-
-// Endpoints:
-// GET  /health                - Health check
-// GET  /admin/stats           - Cache statistics
-// POST /admin/invalidate      - Invalidate specific flag
-// POST /admin/invalidate-all  - Clear entire cache
-// POST /admin/refresh         - Force refresh
-```
-
-### HTTP Middleware
-
-```go
-mw := server.NewMiddleware(c)
-
-http.Handle("/api/", mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    evalCtx, _ := server.GetEvalContext(r.Context())
-    cache, _ := server.GetCache(r.Context())
-    
-    enabled := cache.EvaluateBool(r.Context(), "feature", evalCtx)
-    // ... use flag
-})))
-```
-
-### Disk Persistence
-
-```go
-// Enable disk persistence for fast startup
-diskStorage, err := storage.NewDiskStorage("./vexilla-cache")
-
-c, err := cache.New(
-    cache.WithStorage(diskStorage),
-    // ... other options
-)
-```
-
----
-
-## 📊 Monitoring & Observability
-
-### Cache Metrics
-
-```go
-metrics := c.GetMetrics()
-
-fmt.Printf("Storage Metrics:\n")
+fmt.Printf("Cache Performance:\n")
 fmt.Printf("  Keys Added: %d\n", metrics.Storage.KeysAdded)
 fmt.Printf("  Keys Evicted: %d\n", metrics.Storage.KeysEvicted)
 fmt.Printf("  Hit Ratio: %.2f%%\n", metrics.Storage.HitRatio*100)
 
-fmt.Printf("Circuit Breaker:\n")
-fmt.Printf("  State: %v\n", metrics.CircuitOpen)
+fmt.Printf("\nHealth Status:\n")
+fmt.Printf("  Last Refresh: %s\n", metrics.LastRefresh)
+fmt.Printf("  Circuit Open: %v\n", metrics.CircuitOpen)
 fmt.Printf("  Consecutive Fails: %d\n", metrics.ConsecutiveFails)
-```
-
-### OpenTelemetry Integration
-
-```go
-import (
-    "github.com/OrlandoBitencourt/vexilla/pkg/telemetry"
-    "go.opentelemetry.io/otel"
-)
-
-// Initialize OTel provider
-provider, _ := telemetry.NewOTel()
-
-// Use with cache (implementation-specific)
-// Metrics automatically exported:
-// - vexilla.cache.hits
-// - vexilla.cache.misses
-// - vexilla.evaluations
-// - vexilla.refresh.duration
-// - vexilla.circuit.state
 ```
 
 ---
 
-## 🆚 Comparison: Vexilla vs Direct Flagr
+## 🆚 Comparison: Direct Flagr vs Vexilla
 
 ### Scenario: Brazilian Regional Launch
 
@@ -442,7 +288,8 @@ provider, _ := telemetry.NewOTel()
 }
 ```
 
-**With Direct Flagr:**
+### With Direct Flagr
+
 ```go
 // Every request makes HTTP call
 for req := range requests {
@@ -452,17 +299,27 @@ for req := range requests {
 // 10K req/s = 10K HTTP calls to Flagr
 ```
 
-**With Vexilla:**
+### With Vexilla
+
 ```go
 // Flags cached, evaluated locally
 for req := range requests {
-    enabled := cache.EvaluateBool(ctx, "brazil_launch", evalCtx)
+    enabled := client.Bool(ctx, "brazil_launch", evalCtx)
     // <1ms latency, 0 HTTP requests
 }
 // 10K req/s = 0 HTTP calls to Flagr!
 ```
 
 **Result:** 50-200x faster, zero Flagr load
+
+---
+
+## 📚 Documentation
+
+- **[Migration Guide](MIGRATION.md)** - Migrating from v1 to v2
+- **[Architecture Guide](ARCHITECTURE.md)** - Deep dive into design
+- **[API Reference](https://pkg.go.dev/github.com/OrlandoBitencourt/vexilla)** - Complete API docs
+- **[Examples](examples/)** - Working code samples
 
 ---
 
@@ -485,18 +342,20 @@ go test -bench=. -benchmem ./...
 
 ---
 
-## 📖 Documentation
-
-- [Architecture Guide](ARCHITECTURE.md) - Deep dive into design
-- [API Reference](https://pkg.go.dev/github.com/OrlandoBitencourt/vexilla)
-- [Examples](examples/) - Working code samples
-- [Contributing](CONTRIBUTING.md) - How to contribute
-
----
-
 ## 🤝 Related Projects
 
 - [**Flagr**](https://github.com/openflagr/flagr) - The feature flagging service Vexilla caches
+
+---
+
+## 🚀 Performance Benchmarks
+
+```
+BenchmarkCache_Evaluate_Local-10    200000    5432 ns/op    0 allocs/op
+BenchmarkCache_Evaluate_Remote-10     2000  150234 ns/op  384 allocs/op
+
+Speedup: 27.6x faster for local evaluation
+```
 
 ---
 
@@ -514,6 +373,41 @@ MIT License - see [LICENSE](LICENSE) for details
 - [**Ristretto**](https://github.com/dgraph-io/ristretto) by DGraph - High-performance cache
 - [**expr**](https://github.com/expr-lang/expr) by Anton Medvedev - Expression evaluation
 - [**OpenTelemetry**](https://opentelemetry.io/) - Observability framework
+
+---
+
+## 🆕 What's New in v2?
+
+### Unified Facade API
+
+**Before (v1):**
+```go
+import (
+    "github.com/OrlandoBitencourt/vexilla/pkg/cache"
+    "github.com/OrlandoBitencourt/vexilla/pkg/evaluator"
+    "github.com/OrlandoBitencourt/vexilla/pkg/flagr"
+    "github.com/OrlandoBitencourt/vexilla/pkg/storage"
+)
+```
+
+**After (v2):**
+```go
+import "github.com/OrlandoBitencourt/vexilla"
+```
+
+### Cleaner API
+
+- `cache.EvaluateBool()` → `client.Bool()`
+- `cache.EvaluateString()` → `client.String()`
+- `cache.EvaluateInt()` → `client.Int()`
+
+### Better Configuration
+
+- Functional options pattern
+- Sensible defaults
+- Simplified setup
+
+See [MIGRATION.md](MIGRATION.md) for the complete migration guide.
 
 ---
 
