@@ -152,11 +152,11 @@ result, err := client.Evaluate(ctx, "ab-test", evalCtx)
 if err == nil {
     fmt.Printf("Variant: %s\n", result.VariantKey)
     fmt.Printf("Reason: %s\n", result.EvaluationReason)
-    
-    // Access custom variant data
-    tier := result.GetString("tier", "free")
-    limit := result.GetInt("limit", 100)
 }
+
+// Access custom variant data
+tier := result.GetString("tier", "free")
+limit := result.GetInt("limit", 100)
 ```
 
 ### Fluent Context Building
