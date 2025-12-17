@@ -66,17 +66,9 @@ func (c *HTTPClient) GetFlag(ctx context.Context, flagID int64) (*domain.Flag, e
 		return nil, fmt.Errorf("failed to fetch flag %d: %w", flagID, err)
 	}
 
-	// converter para domain.Flag
-	domainFlag := &domain.Flag{
-		ID:          apiFlag.ID,
-		Key:         apiFlag.Key,
-		Description: apiFlag.Description,
-		Enabled:     apiFlag.Enabled,
-		Tags:        TagsToDomain(apiFlag.Tags),
-		// adicione o que mais existir no struct
-	}
-
-	return domainFlag, nil
+	// converter para domain.Flag usando o adapter completo
+	domainFlag := FlagToDomain(&apiFlag)
+	return &domainFlag, nil
 }
 
 // EvaluateFlag evaluates a flag remotely using Flagr

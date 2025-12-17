@@ -88,7 +88,7 @@ func TestClient_Bool(t *testing.T) {
 				ID:  1,
 				Key: "enabled",
 				Attachment: map[string]json.RawMessage{
-					"value": json.RawMessage(`true`), // 🔥 boolean real
+					"value": json.RawMessage(`true`),
 				},
 			},
 		},
@@ -119,33 +119,43 @@ func TestClient_String(t *testing.T) {
 	defer server.Close()
 
 	server.AddFlag(domain.Flag{
-		ID:      2,
+		ID:      1,
 		Key:     "theme-flag",
 		Enabled: true,
 		Segments: []domain.Segment{
 			{
 				ID:             1,
+				Rank:           1,
 				RolloutPercent: 100,
-				Distributions:  []domain.Distribution{{VariantID: 1, Percent: 100}},
+				Constraints:    []domain.Constraint{},
+				Distributions: []domain.Distribution{
+					{
+						ID:        1,
+						VariantID: 1,
+						Percent:   100,
+					},
+				},
 			},
 		},
 		Variants: []domain.Variant{
 			{
-				ID:         1,
-				Key:        "dark",
-				Attachment: map[string]json.RawMessage{"value": json.RawMessage(`"dark-theme"`)},
+				ID:  1,
+				Key: "dark",
+				Attachment: map[string]json.RawMessage{
+					"value": json.RawMessage(`"dark-theme"`),
+				},
 			},
 		},
 	})
 
-	client, err := New(WithFlagrEndpoint(server.URL))
+	client, err := New(WithFlagrEndpoint(server.URL), WithOnlyEnabled(true))
 	require.NoError(t, err)
 
 	ctx := context.Background()
 	require.NoError(t, client.Start(ctx))
 	defer client.Stop()
 
-	time.Sleep(100 * time.Millisecond)
+	require.NoError(t, client.Sync(ctx))
 
 	evalCtx := NewContext("user-456")
 	theme := client.String(ctx, "theme-flag", evalCtx, "light")
