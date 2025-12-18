@@ -46,6 +46,14 @@ func New(opts ...Option) (*Client, error) {
 }
 
 // Start initializes the client and begins background processes.
+// This method blocks until the initial flag synchronization is complete.
+//
+// The initial sync has a timeout (default 10 seconds) configured via WithInitialTimeout().
+// If the sync fails and no disk cache is available, Start returns an error.
+//
+// After the initial sync completes, background refresh begins automatically
+// based on the configured refresh interval.
+//
 // This must be called before evaluating flags.
 func (c *Client) Start(ctx context.Context) error {
 	err := c.cache.Start(ctx)

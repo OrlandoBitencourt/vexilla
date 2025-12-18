@@ -155,6 +155,38 @@ func deleteAllFlags() {
 	}
 }
 
+func enableFlag(flagID int64) error {
+	body := []byte(`{"enabled":true}`)
+
+	req, err := http.NewRequest(
+		http.MethodPut,
+		fmt.Sprintf("%s/api/v1/flags/%d/enabled", flagrEndpoint, flagID),
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// ⚠️ Se seu Flagr usa auth básica (admin:senha)
+	req.SetBasicAuth("admin", "senha_super_segura")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("enableFlag() status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	return nil
+}
+
 // ============================================
 // FLAG CREATION FUNCTIONS
 // ============================================
@@ -190,7 +222,7 @@ func createNewFeatureFlag() error {
 	}
 	touchGrass()
 
-	return createDistribution(flagID, segmentID, FlagrDistribuitions{
+	if err := createDistribution(flagID, segmentID, FlagrDistribuitions{
 		Distribuitions: []FlagrDistribution{
 			{
 				VariantKey: variantKey,
@@ -198,7 +230,11 @@ func createNewFeatureFlag() error {
 				Percentage: 100,
 			},
 		},
-	})
+	}); err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
 }
 
 func createDarkModeFlag() error {
@@ -229,8 +265,7 @@ func createDarkModeFlag() error {
 	if err != nil {
 		return err
 	}
-
-	return createDistribution(flagID, segmentID, FlagrDistribuitions{
+	err = createDistribution(flagID, segmentID, FlagrDistribuitions{
 		Distribuitions: []FlagrDistribution{
 			{
 				VariantKey: variantKey,
@@ -239,6 +274,10 @@ func createDarkModeFlag() error {
 			},
 		},
 	})
+	if err != nil {
+		return err
+	}
+	return enableFlag(flagID)
 }
 
 func createUIThemeFlag() error {
@@ -290,7 +329,11 @@ func createUIThemeFlag() error {
 			},
 		},
 	}
-	return createDistribution(flagID, segmentID, dist)
+	err = createDistribution(flagID, segmentID, dist)
+	if err != nil {
+		return err
+	}
+	return enableFlag(flagID)
 }
 
 func createMaxItemsFlag() error {
@@ -320,7 +363,7 @@ func createMaxItemsFlag() error {
 		return err
 	}
 
-	return createDistribution(flagID, segmentID, FlagrDistribuitions{
+	err = createDistribution(flagID, segmentID, FlagrDistribuitions{
 		Distribuitions: []FlagrDistribution{
 			{
 				VariantKey: variantKey,
@@ -329,6 +372,11 @@ func createMaxItemsFlag() error {
 			},
 		},
 	})
+	if err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
 }
 
 func createPremiumFeaturesFlag() error {
@@ -365,7 +413,7 @@ func createPremiumFeaturesFlag() error {
 		return err
 	}
 
-	return createDistribution(flagID, segmentID, FlagrDistribuitions{
+	err = createDistribution(flagID, segmentID, FlagrDistribuitions{
 		Distribuitions: []FlagrDistribution{
 			{
 				VariantKey: variantKey,
@@ -374,6 +422,10 @@ func createPremiumFeaturesFlag() error {
 			},
 		},
 	})
+	if err != nil {
+		return err
+	}
+	return enableFlag(flagID)
 }
 
 func createBetaAccessFlag() error {
@@ -403,7 +455,7 @@ func createBetaAccessFlag() error {
 		return err
 	}
 
-	return createDistribution(flagID, segmentID, FlagrDistribuitions{
+	err = createDistribution(flagID, segmentID, FlagrDistribuitions{
 		Distribuitions: []FlagrDistribution{
 			{
 				VariantKey: variantKey,
@@ -412,6 +464,11 @@ func createBetaAccessFlag() error {
 			},
 		},
 	})
+	if err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
 }
 
 func createButtonColorTestFlag() error {
@@ -447,7 +504,7 @@ func createButtonColorTestFlag() error {
 	if err != nil {
 		return err
 	}
-	return createDistribution(flagID, segmentID, FlagrDistribuitions{
+	err = createDistribution(flagID, segmentID, FlagrDistribuitions{
 		Distribuitions: []FlagrDistribution{
 			{
 				VariantKey: "blue",
@@ -461,6 +518,11 @@ func createButtonColorTestFlag() error {
 			},
 		},
 	})
+	if err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
 }
 
 func createPricingLayoutFlag() error {
@@ -495,7 +557,7 @@ func createPricingLayoutFlag() error {
 		return err
 	}
 
-	return createDistribution(flagID, segmentID, FlagrDistribuitions{
+	err = createDistribution(flagID, segmentID, FlagrDistribuitions{
 		Distribuitions: []FlagrDistribution{
 			{
 				VariantKey: "standard",
@@ -514,6 +576,11 @@ func createPricingLayoutFlag() error {
 			},
 		},
 	})
+	if err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
 }
 
 func createGradualRollout30Flag() error {
@@ -549,8 +616,7 @@ func createGradualRollout30Flag() error {
 	if err != nil {
 		return err
 	}
-
-	return createDistribution(flagID, segmentID, FlagrDistribuitions{
+	createDistribution(flagID, segmentID, FlagrDistribuitions{
 		Distribuitions: []FlagrDistribution{
 			{
 				VariantKey: variantKey,
@@ -559,6 +625,11 @@ func createGradualRollout30Flag() error {
 			},
 		},
 	})
+	if err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
 }
 
 func createBrazilLaunchFlag() error {
@@ -595,7 +666,7 @@ func createBrazilLaunchFlag() error {
 		return err
 	}
 
-	return createDistribution(flagID, segmentID, FlagrDistribuitions{
+	err = createDistribution(flagID, segmentID, FlagrDistribuitions{
 		Distribuitions: []FlagrDistribution{
 			{
 				VariantKey: variantKey,
@@ -604,6 +675,11 @@ func createBrazilLaunchFlag() error {
 			},
 		},
 	})
+	if err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
 }
 
 // ============================================

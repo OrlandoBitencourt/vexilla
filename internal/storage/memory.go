@@ -67,6 +67,9 @@ func (m *MemoryStorage) Set(ctx context.Context, key string, flag domain.Flag, t
 	}
 
 	m.metrics.KeysAdded++
+
+	// CRITICAL: Wait for Ristretto to process the write
+	// Ristretto is async by design, this ensures the key is actually stored
 	m.cache.Wait()
 
 	return nil

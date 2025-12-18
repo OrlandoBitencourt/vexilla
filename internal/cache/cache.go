@@ -69,10 +69,12 @@ func New(opts ...Option) (*Cache, error) {
 func (c *Cache) Start(ctx context.Context) error {
 	c.ctx, c.cancel = context.WithCancel(ctx)
 
+	// Initial sync - MUST complete before returning
 	loadCtx, cancel := context.WithTimeout(c.ctx, c.config.InitialTimeout)
 	defer cancel()
 
 	if err := c.refreshFlags(loadCtx); err != nil {
+		// Try to load from disk cache as fallback
 		if diskStorage, ok := c.storage.(*storage.DiskStorage); ok {
 			snapshot, loadErr := diskStorage.LoadSnapshot(loadCtx)
 			if loadErr == nil && len(snapshot) > 0 {
@@ -87,6 +89,10 @@ func (c *Cache) Start(ctx context.Context) error {
 		}
 	}
 
+	// Wait for storage to be ready (Ristretto needs time to process)
+	time.Sleep(100 * time.Millisecond)
+
+	// Start background refresh loop
 	if c.config.RefreshInterval > 0 {
 		c.wg.Add(1)
 		go c.refreshLoop()
