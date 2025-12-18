@@ -619,7 +619,7 @@ func createGradualRollout30Flag() error {
 	if err != nil {
 		return err
 	}
-	createDistribution(flagID, segmentID, FlagrDistribuitions{
+	err = createDistribution(flagID, segmentID, FlagrDistribuitions{
 		Distribuitions: []FlagrDistribution{
 			{
 				VariantKey: variantKey,
