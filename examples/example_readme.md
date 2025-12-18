@@ -43,6 +43,9 @@ This creates 10 flags for testing:
 - ✅ `gradual_rollout_30` - 30% gradual rollout
 - ✅ `brazil_launch` - Regional launch flag
 
+This is how your flagr UI should look like after running setup-flag.go:
+![flagr ui](https://raw.githubusercontent.com/OrlandoBitencourt/vexilla/refs/heads/main/examples/after-setup-flags.png)
+
 ## 🚀 Examples
 
 ### Example 1: Basic Usage
