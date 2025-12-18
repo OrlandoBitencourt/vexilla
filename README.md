@@ -91,7 +91,8 @@ client, err := vexilla.New(
 // Memory usage: ~10MB → ~500KB (95% reduction!)
 ```
 
-[Click and see more examples](examples/example_readme.md)
+- [Click and see more examples](examples/example_readme.md)
+- [Deterministic Rollout (Bucket-based Evaluation)](examples/deterministic_rollout.md)
 
 ---
 
@@ -252,6 +253,31 @@ Vexilla automatically determines the best evaluation strategy:
 - Single distribution with `percentage < 100`
 
 **Performance:** 50-200ms, 1 HTTP request (in a real world scenario where we have lots of services hitting flagr it can take >1s to evaluate).
+
+## Deterministic & Offline Rollouts
+
+Most feature flag solutions rely on **random percentage-based rollouts**, which introduce
+non-deterministic behavior, require HTTP calls, and make debugging difficult.
+
+Vexilla supports **deterministic, bucket-based rollouts**, allowing feature decisions to be made
+**entirely locally**, without randomness or network dependency.
+
+### Key benefits
+
+- ✅ Deterministic flag evaluation
+- ✅ Offline-first / cache-friendly
+- ✅ No HTTP calls during runtime
+- ✅ Predictable and reproducible rollouts
+- ✅ Easier debugging and incident analysis
+
+Instead of rolling out features to “70% of users at random”, Vexilla allows you to:
+
+- Pre-process a user identifier (e.g. CPF, user ID, account ID)
+- Convert it into a numeric bucket (`0–99`)
+- Evaluate feature flags using simple numeric rules
+
+👉 See the full example here:  
+[Deterministic Rollout (Bucket-based Evaluation)](examples/deterministic_rollout.md)
 
 ---
 
