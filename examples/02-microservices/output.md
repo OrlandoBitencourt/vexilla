@@ -1,4 +1,3 @@
-\vexilla\examples\02-microservices> go run .\main.go
 🏴 Vexilla Microservice Example
 ======================================================================
 

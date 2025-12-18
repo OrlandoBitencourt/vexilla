@@ -1,4 +1,3 @@
-\vexilla\examples\01-basic-usage> go run .\main.go
 🏴 Vexilla Basic Example
 ======================================================================
 
