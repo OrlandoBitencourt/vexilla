@@ -1,4 +1,5 @@
 🏴 Vexilla Basic Example
+```go 
 ======================================================================
 
 📦 Creating Vexilla client...
@@ -64,4 +65,4 @@ Cache Performance:
 💡 Try these commands:
    • Modify flags in Flagr UI: http://localhost:18000
    • Run this example again to see changes
-   • Check internal/cache metrics for performance data
+   • Check internal/cache metrics for performance data```

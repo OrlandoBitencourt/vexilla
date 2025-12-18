@@ -1,4 +1,5 @@
 🏴 Vexilla Microservice Example
+```go 
 ======================================================================
 
 This example demonstrates memory optimization in microservices
@@ -76,4 +77,4 @@ Performance & Optimization Metrics
 🔗 Next Steps:
    • Add service tags to your flags in Flagr UI
    • Configure filtering in your microservices
-   • Monitor cache metrics in production
+   • Monitor cache metrics in production```
