@@ -89,7 +89,9 @@ client, err := vexilla.New(
 
 // With 10,000 total flags but only 50 for user-service:
 // Memory usage: ~10MB → ~500KB (95% reduction!)
-```
+``
+
+[Click and see more examples](examples/example_readme.md)
 
 ---
 
