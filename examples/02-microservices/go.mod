@@ -2,7 +2,7 @@ module main
 
 go 1.25.4
 
-require github.com/OrlandoBitencourt/vexilla v1.0.21
+require github.com/OrlandoBitencourt/vexilla v1.0.22
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

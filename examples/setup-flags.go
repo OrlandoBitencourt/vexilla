@@ -92,6 +92,9 @@ func main() {
 		{"pricing_layout", createPricingLayoutFlag},
 		{"gradual_rollout_30", createGradualRollout30Flag},
 		{"brazil_launch", createBrazilLaunchFlag},
+		{"require_email_verification", createRequireEmailVerificationFlag},
+		{"social_login_enabled", createSocialLoginEnabledFlag},
+		{"max_login_attempts", createMaxLoginAttemptsFlag},
 	}
 
 	successCount := 0
@@ -682,9 +685,196 @@ func createBrazilLaunchFlag() error {
 	return enableFlag(flagID)
 }
 
+func createRequireEmailVerificationFlag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         "require-email-verification",
+		Description: "require-email-verification",
+		Enabled:     true,
+		Tags:        []string{"user-service", "production"},
+	})
+	if err != nil {
+		return err
+	}
+
+	variantID, err := createVariant(flagID, FlagrVariant{
+		Key:        "enabled",
+		Attachment: map[string]interface{}{"value": true},
+	})
+	if err != nil {
+		return err
+	}
+
+	segmentID, err := createSegment(flagID, FlagrSegment{
+		Description:    "e-mail verification",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := createDistribution(flagID, segmentID, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: "enabled",
+				VariantID:  variantID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	if err := createTags(flagID, []string{"user-service", "production"}); err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
+}
+
+func createSocialLoginEnabledFlag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         "social-login-enabled",
+		Description: "social-login-enabled",
+		Enabled:     true,
+		Tags:        []string{"user-service", "production"},
+	})
+	if err != nil {
+		return err
+	}
+
+	variantID, err := createVariant(flagID, FlagrVariant{
+		Key:        "enabled",
+		Attachment: map[string]interface{}{"value": true},
+	})
+	if err != nil {
+		return err
+	}
+
+	segmentID, err := createSegment(flagID, FlagrSegment{
+		Description:    "social-login-enabled",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := createDistribution(flagID, segmentID, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: "enabled",
+				VariantID:  variantID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	if err := createTags(flagID, []string{"user-service", "production"}); err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
+}
+
+func createMaxLoginAttemptsFlag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         "max-login-attempts",
+		Description: "max-login-attempts",
+		Enabled:     true,
+		Tags:        []string{"user-service", "production"},
+	})
+	if err != nil {
+		return err
+	}
+
+	fiveID, err := createVariant(flagID, FlagrVariant{
+		Key:        "five",
+		Attachment: map[string]interface{}{"value": 5},
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = createVariant(flagID, FlagrVariant{
+		Key:        "default",
+		Attachment: map[string]interface{}{"value": 3},
+	})
+	if err != nil {
+		return err
+	}
+
+	segmentID, err := createSegment(flagID, FlagrSegment{
+		Description:    "more",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := createDistribution(flagID, segmentID, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: "five",
+				VariantID:  fiveID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	if err := createTags(flagID, []string{"user-service", "production"}); err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
+}
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+
+func createTags(flagID int64, tags []string) error {
+	for _, tag := range tags {
+		if err := createTag(flagID, tag); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createTag(flagID int64, value string) error {
+	body, _ := json.Marshal(map[string]string{
+		"value": value,
+	})
+
+	req, err := http.NewRequest(
+		http.MethodPost,
+		fmt.Sprintf("%s/api/v1/flags/%d/tags", flagrEndpoint, flagID),
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("admin", "senha_super_segura")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("createTag() status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	return nil
+}
 
 func createFlag(flag FlagrFlag) (int64, error) {
 	body, _ := json.Marshal(flag)
