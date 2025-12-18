@@ -375,17 +375,6 @@ go test -bench=. -benchmem ./...
 
 ---
 
-## 🚀 Performance Benchmarks
-
-```
-BenchmarkCache_Evaluate_Local-10    200000    5432 ns/op    0 allocs/op
-BenchmarkCache_Evaluate_Remote-10     2000  150234 ns/op  384 allocs/op
-
-Speedup: 27.6x faster for local evaluation
-```
-
----
-
 ## 📜 License
 
 MIT License - see [LICENSE](LICENSE) for details
