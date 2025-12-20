@@ -5,6 +5,7 @@ package vexilla
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/OrlandoBitencourt/vexilla/internal/cache"
 	"github.com/OrlandoBitencourt/vexilla/internal/domain"
@@ -14,6 +15,13 @@ import (
 // It provides flag evaluation with intelligent caching and routing.
 type Client struct {
 	cache *cache.Cache
+
+	// Server configurations
+	webhookEnabled bool
+	webhookPort    int
+	webhookSecret  string
+	adminEnabled   bool
+	adminPort      int
 }
 
 // New creates a new Vexilla client with the given options.
@@ -42,7 +50,14 @@ func New(opts ...Option) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{cache: c}, nil
+	return &Client{
+		cache:          c,
+		webhookEnabled: cfg.webhookEnabled,
+		webhookPort:    cfg.webhookPort,
+		webhookSecret:  cfg.webhookSecret,
+		adminEnabled:   cfg.adminEnabled,
+		adminPort:      cfg.adminPort,
+	}, nil
 }
 
 // Start initializes the client and begins background processes.
@@ -60,7 +75,25 @@ func (c *Client) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.cache.Sync(ctx)
+
+	if err := c.cache.Sync(ctx); err != nil {
+		return err
+	}
+
+	// Start optional servers
+	if c.webhookEnabled {
+		if err := c.startWebhookServer(ctx, c.webhookPort, c.webhookSecret); err != nil {
+			return fmt.Errorf("failed to start webhook server: %w", err)
+		}
+	}
+
+	if c.adminEnabled {
+		if err := c.startAdminServer(ctx, c.adminPort); err != nil {
+			return fmt.Errorf("failed to start admin server: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (c *Client) Sync(ctx context.Context) error {
