@@ -76,6 +76,53 @@ func main() {
 }
 ```
 
+### Production Setup with Admin & Webhook
+
+```go
+client, err := vexilla.New(
+    // Flagr connection
+    vexilla.WithFlagrEndpoint("http://flagr:18000"),
+    vexilla.WithRefreshInterval(5 * time.Minute),
+    
+    // Admin API for operations
+    vexilla.WithAdminServer(vexilla.AdminConfig{
+        Port: 19000,
+    }),
+    
+    // Webhook for real-time updates
+    vexilla.WithWebhookInvalidation(vexilla.WebhookConfig{
+        Port:   18001,
+        Secret: os.Getenv("WEBHOOK_SECRET"),
+    }),
+    
+    // Resource optimization
+    vexilla.WithServiceTag("user-service"),
+    vexilla.WithOnlyEnabled(true),
+    
+    // Resilience
+    vexilla.WithCircuitBreaker(3, 30*time.Second),
+)
+
+// Admin endpoints now available at http://localhost:19000
+// Webhook listening at http://localhost:18001
+```
+
+### HTTP Middleware Integration
+
+```go
+// Automatic request context injection
+handler := client.HTTPMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    userID := r.Header.Get("X-User-ID")
+    evalCtx := vexilla.NewContext(userID)
+    
+    if client.Bool(r.Context(), "new-feature", evalCtx) {
+        // New feature enabled
+    }
+}))
+
+http.ListenAndServe(":8080", handler)
+```
+
 ### Microservice Usage (with filtering)
 
 ```go
@@ -114,17 +161,24 @@ client, err := vexilla.New(
 ### 🔔 Real-time Updates
 - **Webhook support** - Instant flag updates from Flagr
 - **Event-driven** - No polling overhead
-- **Signature verification** - Secure webhook validation
+- **Signature verification** - Secure HMAC-SHA256 webhook validation
+- **Sub-second propagation** - Updates in <1s vs 5min refresh
 
-### 🛠️ Operations
-- **Admin API** - Management endpoints for ops teams
-- **Health checks** - Monitor cache status
+### 🛠️ Operations & Management
+- **Admin API** - REST endpoints for cache management
+  - `GET /health` - Health check
+  - `GET /admin/stats` - Cache metrics
+  - `POST /admin/invalidate` - Invalidate specific flag
+  - `POST /admin/invalidate-all` - Clear cache
+  - `POST /admin/refresh` - Force refresh
 - **HTTP middleware** - Drop-in request context injection
+- **Graceful shutdown** - Clean resource cleanup
 
 ### 📊 Observability
 - **Full OpenTelemetry** - Traces and metrics
 - **Cache statistics** - Hit ratios, evictions, etc.
 - **Evaluation tracking** - Local vs remote routing
+- **Performance monitoring** - Latency, throughput, error rates
 
 ---
 
@@ -217,6 +271,21 @@ vexilla.WithServiceTag("user-service")
 vexilla.WithAdditionalTags([]string{"production", "critical"}, "any")
 ```
 
+### Server Features
+
+```go
+// Admin API for operations and monitoring
+vexilla.WithAdminServer(vexilla.AdminConfig{
+    Port: 19000,
+})
+
+// Webhook for real-time flag updates from Flagr
+vexilla.WithWebhookInvalidation(vexilla.WebhookConfig{
+    Port:   18001,
+    Secret: "your-webhook-secret",
+})
+```
+
 ### Using a Config Struct
 
 ```go
@@ -229,6 +298,86 @@ cfg.Cache.Filter.RequireServiceTag = true
 
 client, err := vexilla.New(vexilla.WithConfig(cfg))
 ```
+
+---
+
+## 🌐 Server Features
+
+### Admin API
+
+Monitor and manage your cache through REST endpoints:
+
+```bash
+# Health check
+curl http://localhost:19000/health
+
+# Get cache statistics
+curl http://localhost:19000/admin/stats
+
+# Invalidate specific flag
+curl -X POST http://localhost:19000/admin/invalidate \
+  -H "Content-Type: application/json" \
+  -d '{"flag_key": "new-feature"}'
+
+# Force refresh all flags
+curl -X POST http://localhost:19000/admin/refresh
+
+# Clear entire cache
+curl -X POST http://localhost:19000/admin/invalidate-all
+```
+
+### Webhook Integration
+
+Receive real-time updates from Flagr:
+
+**Configure in Flagr:**
+1. Go to Settings > Webhooks
+2. Add URL: `http://vexilla:18001/webhook`
+3. Set shared secret (must match Vexilla config)
+4. Enable events: `flag.updated`, `flag.deleted`
+
+**Payload Example:**
+```json
+{
+  "event": "flag.updated",
+  "flag_keys": ["new-feature", "beta-access"],
+  "timestamp": "2025-12-20T10:30:00Z"
+}
+```
+
+**Benefits:**
+- **Sub-second updates** vs 5-minute polling
+- **Reduced load** on Flagr (no constant polling)
+- **Secure** with HMAC-SHA256 signature verification
+
+### HTTP Middleware
+
+Automatically inject request context into flag evaluations:
+
+```go
+mux := http.NewServeMux()
+
+mux.HandleFunc("/api/features", func(w http.ResponseWriter, r *http.Request) {
+    // Middleware automatically extracts context from request
+    userID := r.Header.Get("X-User-ID")
+    evalCtx := vexilla.NewContext(userID)
+    
+    features := map[string]bool{
+        "new_dashboard": client.Bool(r.Context(), "new-dashboard", evalCtx),
+        "beta_features": client.Bool(r.Context(), "beta-features", evalCtx),
+    }
+    
+    json.NewEncoder(w).Encode(features)
+})
+
+// Wrap with middleware
+handler := client.HTTPMiddleware(mux)
+http.ListenAndServe(":8080", handler)
+```
+
+**For detailed server documentation, see:**
+- [Server Features Guide](SERVER_FEATURES.md)
+- [Server Examples](examples/example_server.go)
 
 ---
 
@@ -270,7 +419,7 @@ Vexilla supports **deterministic, bucket-based rollouts**, allowing feature deci
 - ✅ Predictable and reproducible rollouts
 - ✅ Easier debugging and incident analysis
 
-Instead of rolling out features to “70% of users at random”, Vexilla allows you to:
+Instead of rolling out features to "70% of users at random", Vexilla allows you to:
 
 - Pre-process a user identifier (e.g. CPF, user ID, account ID)
 - Convert it into a numeric bucket (`0–99`)
@@ -282,6 +431,8 @@ Instead of rolling out features to “70% of users at random”, Vexilla allows 
 ---
 
 ## 📊 Monitoring & Metrics
+
+### Programmatic Access
 
 ```go
 metrics := client.Metrics()
@@ -295,6 +446,31 @@ fmt.Printf("\nHealth Status:\n")
 fmt.Printf("  Last Refresh: %s\n", metrics.LastRefresh)
 fmt.Printf("  Circuit Open: %v\n", metrics.CircuitOpen)
 fmt.Printf("  Consecutive Fails: %d\n", metrics.ConsecutiveFails)
+```
+
+### Admin API
+
+```bash
+# Get all metrics via HTTP
+curl http://localhost:19000/admin/stats | jq
+```
+
+### OpenTelemetry
+
+Vexilla exports metrics and traces via OpenTelemetry:
+
+```go
+import (
+    "go.opentelemetry.io/otel"
+    "go.opentelemetry.io/otel/sdk/metric"
+)
+
+// Metrics exported:
+// - vexilla.cache.hits
+// - vexilla.cache.misses
+// - vexilla.evaluations (with strategy label)
+// - vexilla.refresh.duration
+// - vexilla.circuit.state
 ```
 
 ---
@@ -344,6 +520,7 @@ for req := range requests {
 
 ## 📚 Documentation
 
+- **[Server Features Guide](SERVER_FEATURES.md)** - Admin API, webhooks, middleware
 - **[Architecture Guide](ARCHITECTURE.md)** - Deep dive into design
 - **[API Reference](https://pkg.go.dev/github.com/OrlandoBitencourt/vexilla)** - Complete API docs
 - **[Examples](examples/)** - Working code samples
