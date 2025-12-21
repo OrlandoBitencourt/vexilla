@@ -11,7 +11,9 @@
 5. [Flag Filtering System](#flag-filtering-system)
 6. [Data Flow](#data-flow)
 7. [Performance Characteristics](#performance-characteristics)
-8. [Design Decisions](#design-decisions)
+8. [Deterministic Rollout Pattern](#deterministic-rollout-pattern)
+9. [Design Decisions](#design-decisions)
+10. [Recent Enhancements](#recent-enhancements)
 
 ---
 
@@ -38,6 +40,8 @@ Only flags with **percentage-based rollouts** or **A/B testing** require Flagr's
 │        │               │               │                            │
 │        └───────────────┴───────────────┘                            │
 │                        │                                            │
+│                  HTTP Middleware (optional)                         │
+│                        │                                            │
 │                        ▼                                            │
 │              ┌─────────────────────┐                                │
 │              │    Cache (pkg)      │                                │
@@ -54,13 +58,13 @@ Only flags with **percentage-based rollouts** or **A/B testing** require Flagr's
 │  Storage     │  │  Evaluator   │  │  Flagr       │  │  Servers     │
 │  (Memory/    │  │  (Local)     │  │  Client      │  │  (Admin/     │
 │   Disk)      │  │              │  │  (HTTP)      │  │   Webhook)   │
-└──────────────┘  └──────────────┘  └──────┬───────┘  └──────────────┘
-                                            │
-                                            ▼
-                                   ┌───────────────┐
-                                   │  Flagr Server │
-                                   │   (HTTP API)  │
-                                   └───────────────┘
+└──────────────┘  └──────────────┘  └──────┬───────┘  └──────┬───────┘
+                                            │                 │
+                                            ▼                 ▼
+                                   ┌───────────────┐  ┌──────────────┐
+                                   │  Flagr Server │  │  Admin API   │
+                                   │   (HTTP API)  │  │  Webhook API │
+                                   └───────────────┘  └──────────────┘
 ```
 
 ---
@@ -328,7 +332,7 @@ Management interface for operations.
 
 #### Middleware (`middleware.go`)
 
-HTTP middleware for request context injection.
+HTTP middleware for automatic request context injection.
 
 ```go
 type Middleware struct {
@@ -337,9 +341,30 @@ type Middleware struct {
 ```
 
 **Features:**
-- Extracts user context from headers/cookies
-- Builds evaluation context automatically
+- Extracts user context from HTTP headers
+- Builds evaluation context automatically from request data
 - Injects cache and context into request
+- Drop-in integration with standard `http.Handler`
+
+**Usage Example:**
+```go
+// Wrap any HTTP handler
+handler := client.HTTPMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    userID := r.Header.Get("X-User-ID")
+    evalCtx := vexilla.NewContext(userID)
+
+    if client.Bool(r.Context(), "new-feature", evalCtx) {
+        // Feature enabled
+    }
+}))
+
+http.ListenAndServe(":8080", handler)
+```
+
+**Benefits:**
+- Eliminates boilerplate context extraction
+- Consistent context building across endpoints
+- Seamless integration with existing HTTP routers
 
 ---
 
@@ -553,6 +578,9 @@ Cache.Start(ctx)
     │
     ├─> Apply filtering (if configured)
     │   └─> FilterConfig.ShouldCacheFlag()
+    │       ├─> OnlyEnabled filter
+    │       ├─> ServiceTag filter
+    │       └─> AdditionalTags filter
     │
     ├─> Store in Ristretto
     │   └─> storage.Set(key, flag, ttl)
@@ -560,8 +588,12 @@ Cache.Start(ctx)
     ├─> Start background refresh goroutine
     │
     ├─> Start webhook server (if enabled)
+    │   └─> Listen on configured port
+    │       └─> Handle flag.updated and flag.deleted events
     │
     └─> Start admin API (if enabled)
+        └─> Listen on configured port
+            └─> Expose management endpoints
 ```
 
 ### Background Refresh
@@ -751,6 +783,125 @@ Memory efficiency:
 
 ---
 
+## Deterministic Rollout Pattern
+
+### Overview
+
+Vexilla enables a powerful pattern for **deterministic rollouts** that eliminates the need for random percentage-based evaluations, enabling 100% local evaluation with zero HTTP dependencies.
+
+### Problem with Traditional Rollouts
+
+Traditional percentage-based rollouts have several drawbacks:
+- **Non-deterministic**: Random evaluation means results can change between calls
+- **HTTP-dependent**: Requires Flagr API calls for consistent hashing
+- **Hard to debug**: Difficult to reproduce user-specific behavior
+- **Network latency**: Adds 50-200ms per evaluation
+
+### Solution: Pre-computed Buckets
+
+Instead of relying on Flagr's random rollout percentages, applications can pre-compute a **deterministic bucket** from user identifiers and send it as a simple numeric attribute.
+
+### Architecture
+
+```
+User Identifier (CPF, UserID, etc.)
+    │
+    ▼
+Application (pre-processing)
+    │
+    ├─> Extract/Hash identifier
+    │   └─> Generate bucket: 0-99
+    │
+    ▼
+Vexilla.Evaluate(ctx, flag, {bucket: 42})
+    │
+    ▼
+Local Evaluation (no HTTP)
+    │
+    ├─> Check: bucket >= 0 AND bucket <= 69?
+    │   └─> Match: Variant A
+    │
+    └─> Else: Default variant
+```
+
+### Example: CPF-based Bucketing
+
+```go
+// Pre-processing: Extract bucket from CPF
+func CPFBucket(cpf string) int {
+    clean := strings.NewReplacer(".", "", "-", "").Replace(cpf)
+    if len(clean) < 7 {
+        return -1
+    }
+
+    // Use digits 6-7 to create bucket 00-99
+    bucket, err := strconv.Atoi(clean[5:7])
+    if err != nil {
+        return -1
+    }
+
+    return bucket
+}
+
+// Usage
+attrs := vexilla.Attributes{
+    "cpf_bucket": CPFBucket("123.456.789-09"),
+}
+
+enabled := client.Bool(ctx, "new-feature", attrs)
+```
+
+### Flagr Configuration
+
+**Segment: audience_a (70% rollout)**
+
+| Field      | Operator | Value |
+|------------|----------|-------|
+| cpf_bucket | >=       | 0     |
+| cpf_bucket | <=       | 69    |
+
+**Segment: default (30% rollout)**
+- No constraints (matches all others)
+
+### Benefits
+
+✅ **Deterministic**: Same input always produces same result
+✅ **100% Local**: No HTTP calls to Flagr needed
+✅ **Sub-millisecond**: <1ms evaluation latency
+✅ **Reproducible**: Easy to debug user-specific behavior
+✅ **Offline-capable**: Works without network connectivity
+✅ **Cacheable**: Fully compatible with Vexilla's caching layer
+
+### Performance Comparison
+
+| Approach | Latency | HTTP Calls | Deterministic |
+|----------|---------|------------|---------------|
+| Flagr % rollout | 50-200ms | 1 per eval | ❌ Random |
+| Deterministic bucket | <1ms | 0 | ✅ Stable |
+
+**Speedup**: ~50-200x faster, zero network overhead
+
+### Use Cases
+
+This pattern is ideal for:
+- **Critical features**: Where latency matters
+- **Edge computing**: Limited connectivity environments
+- **Mobile apps**: Reduce battery drain from network calls
+- **Compliance**: Reproducible audit trails
+- **A/B testing**: Stable user assignments without sticky sessions
+
+### Applicable Identifiers
+
+Any stable identifier can be used:
+- User ID (hash % 100)
+- Account ID
+- Document numbers (CPF, SSN, etc.)
+- Email hash
+- Device ID
+- Session ID (for short-term experiments)
+
+---
+
 ## Design Decisions
 
 ### 1. Why Ristretto over sync.Map?
@@ -911,9 +1062,51 @@ Config{
 
 ---
 
-## Future Enhancements
+## Recent Enhancements
 
-### Planned Features
+### ✅ Implemented Features (Latest Version)
+
+1. **✅ Webhook Invalidation**
+   - Real-time flag updates from Flagr
+   - HMAC-SHA256 signature verification
+   - Event-driven cache invalidation
+   - Sub-second update propagation
+
+   ```go
+   vexilla.WithWebhookInvalidation(vexilla.WebhookConfig{
+       Port:   18001,
+       Secret: "shared-secret",
+   })
+   ```
+
+2. **✅ Admin Server**
+   - REST API for cache management
+   - Health checks and metrics
+   - Manual invalidation and refresh
+   - Operational visibility
+
+   ```go
+   vexilla.WithAdminServer(vexilla.AdminConfig{
+       Port: 19000,
+   })
+   ```
+
+3. **✅ HTTP Middleware**
+   - Automatic request context injection
+   - Seamless integration with `http.Handler`
+   - Eliminates boilerplate code
+
+   ```go
+   handler := client.HTTPMiddleware(myHandler)
+   ```
+
+4. **✅ Deterministic Rollout Pattern**
+   - Pre-computed bucket-based evaluation
+   - 100% local evaluation for rollouts
+   - Zero HTTP overhead
+   - See [Deterministic Rollout Pattern](#deterministic-rollout-pattern) section
+
+### 🔜 Future Enhancements
 
 1. **Distributed Cache** (Redis/Memcached)
    - Shared cache across instances
@@ -986,6 +1179,9 @@ Vexilla provides a production-grade caching layer for Flagr that:
 3. **Maintains full compatibility** with Flagr's feature set
 4. **Provides intelligent filtering** for resource optimization
 5. **Offers enterprise features** (observability, resilience, persistence)
+6. **Enables real-time updates** via webhook invalidation
+7. **Simplifies operations** with admin API and HTTP middleware
+8. **Supports deterministic rollouts** for offline-first evaluation
 
 The architecture balances performance, reliability, and maintainability while providing clear extension points for future enhancements.
 
