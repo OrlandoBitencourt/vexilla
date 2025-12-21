@@ -1,0 +1,12 @@
+# Benchmark results
+quick_results.txt
+results/*.txt
+!results/example_results.md
+
+# Profiling files
+*.prof
+*.out
+
+# Temporary files
+*.tmp
+*.log

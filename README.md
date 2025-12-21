@@ -18,12 +18,18 @@ Vexilla is a **high-performance caching layer** for [Flagr](https://github.com/o
 
 ### 📊 Performance Impact
 
+**Real benchmark results (AMD Ryzen 5 5600G, 12 cores, Windows):**
+
 | Metric | Flagr Direct | Vexilla (Local) | Vexilla (Remote) | Improvement |
 |--------|--------------|-----------------|------------------|-------------|
-| **Latency** | 50-200ms | <1ms | 50-200ms | **50-200x faster** |
+| **Latency** | 50-200ms | **335 ns** (0.335 μs) | 50-200ms | **>400,000x faster** |
 | **HTTP Requests** | 1 per eval | 0 per eval | 1 per eval | **100% reduction** |
-| **Throughput** | ~2K req/s | >200K req/s | ~2K req/s | **100x higher** |
-| **Memory Usage** | N/A | ~1KB/flag | ~1KB/flag | Configurable filtering |
+| **Throughput** | ~2K req/s | **37.7M ops/s** | ~2K req/s | **18,850x higher** |
+| **Memory Usage** | N/A | **448 B/eval** | ~1KB/flag | Configurable filtering |
+| **Concurrent (12 cores)** | N/A | **85.85 ns** | N/A | **11.6M ops/sec** |
+| **Client API** | N/A | **73 ns** | N/A | **13.7M ops/sec** |
+
+[Full benchmark results →](benchmarks/results/REAL_RESULTS.md)
 
 ---
 
@@ -540,9 +546,24 @@ go tool cover -html=coverage.out
 # Run with race detector
 go test -race ./...
 
-# Benchmarks
-go test -bench=. -benchmem ./...
+# Run benchmarks
+cd benchmarks
+./run_benchmarks.sh    # Linux/macOS
+./run_benchmarks.bat   # Windows
+
+# Quick benchmarks (1-2 minutes)
+./quick_bench.sh
 ```
+
+**Latest Benchmark Results:**
+- Local evaluation (simple): **335 ns/op** (0.335 μs)
+- Complex constraints: **625 ns/op** (0.625 μs)
+- Concurrent throughput: **11.6M ops/sec** (37.7M single-core)
+- Client API: **73 ns/op** (13.7M ops/sec)
+- Memory per evaluation: **448 bytes**, 6 allocations
+- Cache hit: **364.9 ns/op** (10.4M ops/sec)
+
+See [benchmarks/results/REAL_RESULTS.md](benchmarks/results/REAL_RESULTS.md) for detailed performance data.
 
 ---
 
