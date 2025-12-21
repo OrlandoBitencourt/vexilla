@@ -436,6 +436,105 @@ func TestClient_ConcurrentAccess(t *testing.T) {
 	}
 }
 
+// TestClient_Start_WithWebhookServer tests starting with webhook server
+func TestClient_Start_WithWebhookServer(t *testing.T) {
+	server := NewMockFlagrServer(t)
+	defer server.Close()
+
+	server.AddFlag(domain.Flag{
+		ID:      1,
+		Key:     "test-flag",
+		Enabled: true,
+		Segments: []domain.Segment{
+			{RolloutPercent: 100, Distributions: []domain.Distribution{{VariantID: 1, Percent: 100}}},
+		},
+		Variants: []domain.Variant{{ID: 1, Key: "on"}},
+	})
+
+	client, err := New(
+		WithFlagrEndpoint(server.URL),
+		WithWebhookInvalidation(WebhookConfig{
+			Port:   28001,
+			Secret: "test-secret",
+		}),
+	)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	err = client.Start(ctx)
+	require.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+
+	err = client.Stop()
+	assert.NoError(t, err)
+}
+
+// TestClient_Start_WithAdminServer tests starting with admin server
+func TestClient_Start_WithAdminServer(t *testing.T) {
+	server := NewMockFlagrServer(t)
+	defer server.Close()
+
+	server.AddFlag(domain.Flag{
+		ID:      1,
+		Key:     "test-flag",
+		Enabled: true,
+		Segments: []domain.Segment{
+			{RolloutPercent: 100, Distributions: []domain.Distribution{{VariantID: 1, Percent: 100}}},
+		},
+		Variants: []domain.Variant{{ID: 1, Key: "on"}},
+	})
+
+	client, err := New(
+		WithFlagrEndpoint(server.URL),
+		WithAdminServer(AdminConfig{
+			Port: 29001,
+		}),
+	)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	err = client.Start(ctx)
+	require.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+
+	err = client.Stop()
+	assert.NoError(t, err)
+}
+
+// TestClient_Sync_NilCache tests Sync with nil cache
+func TestClient_Sync_NilCache(t *testing.T) {
+	client := &Client{
+		cache: nil,
+	}
+
+	err := client.Sync(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cache not initialized")
+}
+
+// TestClient_Evaluate_NotFound tests evaluating a non-existent flag
+func TestClient_Evaluate_NotFound(t *testing.T) {
+	server := NewMockFlagrServer(t)
+	defer server.Close()
+
+	client, err := New(WithFlagrEndpoint(server.URL))
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	require.NoError(t, client.Start(ctx))
+	defer client.Stop()
+
+	time.Sleep(100 * time.Millisecond)
+
+	evalCtx := NewContext("user-test")
+	result, err := client.Evaluate(ctx, "nonexistent", evalCtx)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
 // BenchmarkClient_Bool benchmarks boolean evaluation
 func BenchmarkClient_Bool(b *testing.B) {
 	server := NewMockFlagrServer(&testing.T{})

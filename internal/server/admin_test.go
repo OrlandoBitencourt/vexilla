@@ -15,6 +15,9 @@ type mockCache struct {
 	RefreshCalled       bool
 	LastInvalidatedKey  string
 	Metrics             interface{}
+	invalidateErr       error
+	invalidateAllErr    error
+	refreshErr          error
 }
 
 func (m *mockCache) GetMetrics() interface{} {
@@ -24,17 +27,17 @@ func (m *mockCache) GetMetrics() interface{} {
 func (m *mockCache) InvalidateFlag(flagKey string) error {
 	m.InvalidateCalled = true
 	m.LastInvalidatedKey = flagKey
-	return nil
+	return m.invalidateErr
 }
 
 func (m *mockCache) InvalidateAll() error {
 	m.InvalidateAllCalled = true
-	return nil
+	return m.invalidateAllErr
 }
 
 func (m *mockCache) RefreshFlags() error {
 	m.RefreshCalled = true
-	return nil
+	return m.refreshErr
 }
 
 func TestAdminServer_Health(t *testing.T) {

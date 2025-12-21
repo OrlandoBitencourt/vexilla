@@ -166,3 +166,13 @@ func TestDiskStorage_Metrics(t *testing.T) {
 	assert.Equal(t, uint64(0), m.GetsDropped)
 	assert.Equal(t, uint64(1), m.KeysDeleted)
 }
+
+func TestDiskStorage_Close(t *testing.T) {
+	dir := t.TempDir()
+
+	ds, err := NewDiskStorage(dir)
+	require.NoError(t, err)
+
+	err = ds.Close()
+	assert.NoError(t, err)
+}
