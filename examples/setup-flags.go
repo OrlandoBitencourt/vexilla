@@ -95,6 +95,10 @@ func main() {
 		{"require_email_verification", createRequireEmailVerificationFlag},
 		{"social_login_enabled", createSocialLoginEnabledFlag},
 		{"max_login_attempts", createMaxLoginAttemptsFlag},
+		{"shopping.beta_features", createShoppingBetaFeaturesFlag},
+		{"shopping.ai_recommendations", createShoppingAIRecommendationsFlag},
+		{"shopping.new_checkout", createShoppingNewCheckoutFlag},
+		{"shopping.product_card_style", createShoppingProductCardStyleFlag},
 	}
 
 	successCount := 0
@@ -825,6 +829,259 @@ func createMaxLoginAttemptsFlag() error {
 	}
 
 	if err := createTags(flagID, []string{"user-service", "production"}); err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
+}
+
+func createShoppingBetaFeaturesFlag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         randomKey("shopping.beta_features"),
+		Description: "shopping beta features",
+		Enabled:     true,
+	})
+	if err != nil {
+		return err
+	}
+
+	enabledID, err := createVariant(flagID, FlagrVariant{
+		Key:        "enabled",
+		Attachment: map[string]interface{}{"value": true},
+	})
+	if err != nil {
+		return err
+	}
+
+	disabledID, err := createVariant(flagID, FlagrVariant{
+		Key:        "disabled",
+		Attachment: map[string]interface{}{"value": false},
+	})
+	if err != nil {
+		return err
+	}
+
+	premiumSegment, err := createSegment(flagID, FlagrSegment{
+		Description:    "premium users",
+		RolloutPercent: 100,
+		Constraints: []FlagrConstraint{
+			{Property: "tier", Operator: "EQ", Value: "premium"},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := createDistribution(flagID, premiumSegment, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: "enabled",
+				VariantID:  enabledID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	defaultSegment, err := createSegment(flagID, FlagrSegment{
+		Description:    "default",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := createDistribution(flagID, defaultSegment, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: "disabled",
+				VariantID:  disabledID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
+}
+
+func createShoppingAIRecommendationsFlag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         randomKey("shopping.ai_recommendations"),
+		Description: "AI product recommendations",
+		Enabled:     true,
+	})
+	if err != nil {
+		return err
+	}
+
+	enabledID, err := createVariant(flagID, FlagrVariant{
+		Key:        "enabled",
+		Attachment: map[string]interface{}{"value": true},
+	})
+	if err != nil {
+		return err
+	}
+
+	disabledID, err := createVariant(flagID, FlagrVariant{
+		Key:        "disabled",
+		Attachment: map[string]interface{}{"value": false},
+	})
+	if err != nil {
+		return err
+	}
+
+	premiumSegment, err := createSegment(flagID, FlagrSegment{
+		Description:    "premium users",
+		RolloutPercent: 100,
+		Constraints: []FlagrConstraint{
+			{Property: "tier", Operator: "EQ", Value: "premium"},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := createDistribution(flagID, premiumSegment, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: "enabled",
+				VariantID:  enabledID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	defaultSegment, err := createSegment(flagID, FlagrSegment{
+		Description:    "default",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := createDistribution(flagID, defaultSegment, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: "disabled",
+				VariantID:  disabledID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
+}
+func createShoppingNewCheckoutFlag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         randomKey("shopping.new_checkout"),
+		Description: "new checkout flow",
+		Enabled:     true,
+	})
+	if err != nil {
+		return err
+	}
+
+	onID, err := createVariant(flagID, FlagrVariant{
+		Key:        "enabled",
+		Attachment: map[string]interface{}{"value": true},
+	})
+	if err != nil {
+		return err
+	}
+
+	offID, err := createVariant(flagID, FlagrVariant{
+		Key:        "disabled",
+		Attachment: map[string]interface{}{"value": false},
+	})
+	if err != nil {
+		return err
+	}
+
+	segmentID, err := createSegment(flagID, FlagrSegment{
+		Description:    "70/30 rollout",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := createDistribution(flagID, segmentID, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{VariantKey: "enabled", VariantID: onID, Percentage: 70},
+			{VariantKey: "disabled", VariantID: offID, Percentage: 30},
+		},
+	}); err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
+}
+func createShoppingProductCardStyleFlag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         randomKey("shopping.product_card_style"),
+		Description: "product card style",
+		Enabled:     true,
+	})
+	if err != nil {
+		return err
+	}
+
+	premiumID, _ := createVariant(flagID, FlagrVariant{
+		Key:        "premium",
+		Attachment: map[string]interface{}{"value": "premium"},
+	})
+	_, _ = createVariant(flagID, FlagrVariant{
+		Key:        "discount",
+		Attachment: map[string]interface{}{"value": "discount"},
+	})
+	_, _ = createVariant(flagID, FlagrVariant{
+		Key:        "featured",
+		Attachment: map[string]interface{}{"value": "featured"},
+	})
+	standardID, _ := createVariant(flagID, FlagrVariant{
+		Key:        "standard",
+		Attachment: map[string]interface{}{"value": "standard"},
+	})
+
+	enterpriseSegment, err := createSegment(flagID, FlagrSegment{
+		Description:    "enterprise",
+		RolloutPercent: 100,
+		Constraints: []FlagrConstraint{
+			{Property: "tier", Operator: "EQ", Value: "enterprise"},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := createDistribution(flagID, enterpriseSegment, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{VariantKey: "premium", VariantID: premiumID, Percentage: 100},
+		},
+	}); err != nil {
+		return err
+	}
+
+	defaultSegment, err := createSegment(flagID, FlagrSegment{
+		Description:    "default",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := createDistribution(flagID, defaultSegment, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{VariantKey: "standard", VariantID: standardID, Percentage: 100},
+		},
+	}); err != nil {
 		return err
 	}
 
