@@ -3,7 +3,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -53,9 +52,9 @@ type FlagrDistribuitions struct {
 
 func randomKey(base string) string {
 	return base
-	b := make([]byte, 4)
-	rand.Read(b)
-	return fmt.Sprintf("%s-%x", base, b)
+	//b := make([]byte, 4)
+	//rand.Read(b)
+	//return fmt.Sprintf("%s-%x", base, b)
 }
 
 func main() {
@@ -99,6 +98,13 @@ func main() {
 		{"shopping.ai_recommendations", createShoppingAIRecommendationsFlag},
 		{"shopping.new_checkout", createShoppingNewCheckoutFlag},
 		{"shopping.product_card_style", createShoppingProductCardStyleFlag},
+		// Demo API flags (99-complete-api example)
+		{"api.checkout.v2", createAPICheckoutV2Flag},
+		{"api.checkout.rollout", createAPICheckoutRolloutFlag},
+		{"api.rate_limit.enabled", createAPIRateLimitFlag},
+		{"api.kill_switch", createAPIKillSwitchFlag},
+		{"frontend.new_ui", createFrontendNewUIFlag},
+		{"frontend.beta_banner", createFrontendBetaBannerFlag},
 	}
 
 	successCount := 0
@@ -1222,4 +1228,280 @@ func createDistribution(flagID, segmentID int64, dist FlagrDistribuitions) error
 	}
 
 	return nil
+}
+
+// ============================================
+// DEMO API FLAGS (99-complete-api example)
+// ============================================
+
+func createAPICheckoutV2Flag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         randomKey("api.checkout.v2"),
+		Description: "Enable checkout V2 (kill switch)",
+		Enabled:     true,
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	variantKey := "enabled"
+	variantID, err := createVariant(flagID, FlagrVariant{
+		Key:        variantKey,
+		Attachment: map[string]interface{}{"value": true},
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	segmentID, err := createSegment(flagID, FlagrSegment{
+		Description:    "All users",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	if err := createDistribution(flagID, segmentID, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: variantKey,
+				VariantID:  variantID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
+}
+
+func createAPICheckoutRolloutFlag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         randomKey("api.checkout.rollout"),
+		Description: "Checkout rollout percentage (0-100)",
+		Enabled:     true,
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	variantKey := "30"
+	variantID, err := createVariant(flagID, FlagrVariant{
+		Key:        variantKey,
+		Attachment: map[string]interface{}{"value": 30},
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	segmentID, err := createSegment(flagID, FlagrSegment{
+		Description:    "Default rollout",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	if err := createDistribution(flagID, segmentID, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: variantKey,
+				VariantID:  variantID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
+}
+
+func createAPIRateLimitFlag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         randomKey("api.rate_limit.enabled"),
+		Description: "Enable API rate limiting",
+		Enabled:     false, // Initially disabled to avoid rate limiting during demo
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	variantKey := "enabled"
+	variantID, err := createVariant(flagID, FlagrVariant{
+		Key:        variantKey,
+		Attachment: map[string]interface{}{"value": true},
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	segmentID, err := createSegment(flagID, FlagrSegment{
+		Description:    "All users",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	if err := createDistribution(flagID, segmentID, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: variantKey,
+				VariantID:  variantID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	// Note: Flag is created but NOT enabled (see Enabled: false above)
+	return nil
+}
+
+func createAPIKillSwitchFlag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         randomKey("api.kill_switch"),
+		Description: "Global API kill switch (emergency)",
+		Enabled:     false, // Initially disabled (only for emergencies)
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	variantKey := "enabled"
+	variantID, err := createVariant(flagID, FlagrVariant{
+		Key:        variantKey,
+		Attachment: map[string]interface{}{"value": true},
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	segmentID, err := createSegment(flagID, FlagrSegment{
+		Description:    "Emergency shutdown",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	if err := createDistribution(flagID, segmentID, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: variantKey,
+				VariantID:  variantID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	// Note: Flag is created but NOT enabled (see Enabled: false above)
+	return nil
+}
+
+func createFrontendNewUIFlag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         randomKey("frontend.new_ui"),
+		Description: "Enable new frontend UI",
+		Enabled:     true,
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	variantKey := "enabled"
+	variantID, err := createVariant(flagID, FlagrVariant{
+		Key:        variantKey,
+		Attachment: map[string]interface{}{"value": true},
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	segmentID, err := createSegment(flagID, FlagrSegment{
+		Description:    "All users",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	if err := createDistribution(flagID, segmentID, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: variantKey,
+				VariantID:  variantID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
+}
+
+func createFrontendBetaBannerFlag() error {
+	flagID, err := createFlag(FlagrFlag{
+		Key:         randomKey("frontend.beta_banner"),
+		Description: "Show beta banner on frontend",
+		Enabled:     true,
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	variantKey := "enabled"
+	variantID, err := createVariant(flagID, FlagrVariant{
+		Key:        variantKey,
+		Attachment: map[string]interface{}{"value": true},
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	segmentID, err := createSegment(flagID, FlagrSegment{
+		Description:    "All users",
+		RolloutPercent: 100,
+	})
+	if err != nil {
+		return err
+	}
+	touchGrass()
+
+	if err := createDistribution(flagID, segmentID, FlagrDistribuitions{
+		Distribuitions: []FlagrDistribution{
+			{
+				VariantKey: variantKey,
+				VariantID:  variantID,
+				Percentage: 100,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	return enableFlag(flagID)
 }

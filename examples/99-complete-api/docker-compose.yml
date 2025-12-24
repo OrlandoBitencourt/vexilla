@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  flagr:
+    image: ghcr.io/openflagr/flagr:latest
+    ports:
+      - "18000:18000"
+    environment:
+      - FLAGR_DB_DBDRIVER=sqlite3
+      - FLAGR_DB_DBCONNECTIONSTR=/data/flagr.sqlite
+    volumes:
+      - flagr-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  flagr-data:
