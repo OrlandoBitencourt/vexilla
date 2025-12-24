@@ -360,20 +360,87 @@ go run main.go
 
 ---
 
+### [99-complete-api](./99-complete-api) - 🎯 Complete Demo Application
+
+**What it demonstrates:**
+- Full-stack application (Go + Next.js)
+- Real-world shopping API with checkout flows
+- Deterministic rollout with visual explanation
+- User context simulation
+- Admin operations and metrics
+- Rate limiting with feature flags
+- Kill switches for emergency rollback
+- Production-ready patterns
+
+**When to use this:** Understanding complete Vexilla integration, demo/presentation, reference architecture
+
+**Key features:**
+- ✅ Complete backend API (Go + Gin)
+- ✅ Interactive frontend (Next.js + TypeScript)
+- ✅ 6 production feature flags
+- ✅ Visual rollout explanation
+- ✅ User simulator (5 personas)
+- ✅ Admin panel with metrics
+- ✅ Cache invalidation UI
+
+**Feature Flags:**
+1. **api.checkout.v2** - New checkout experience toggle
+2. **api.checkout.rollout** - Gradual rollout (0-100%)
+3. **api.rate_limit.enabled** - Dynamic rate limiting
+4. **api.kill_switch** - Emergency shutdown
+5. **frontend.new_ui** - New UI components
+6. **frontend.beta_banner** - Beta tester banner
+
+**Quick Start:**
+```bash
+cd 99-complete-api
+
+# Setup flags (run once)
+bash scripts/setup-flags.sh
+# or: go run ../setup-flags.go
+
+# Terminal 1: Start backend
+cd backend
+go run main.go
+
+# Terminal 2: Start frontend
+cd frontend
+npm install
+npm run dev
+```
+
+**Access:**
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8080
+- Flagr Admin: http://localhost:18000
+
+**Demo Flow:**
+1. Switch between users (Alice, Bruno, Carlos, Diana, Enterprise)
+2. Watch deterministic rollout in action
+3. See different checkout versions (V1 vs V2)
+4. Toggle flags in Flagr admin
+5. Invalidate cache from admin panel
+6. Observe instant updates
+
+---
+
 ## Feature Matrix
 
 | Feature | Examples |
 |---------|----------|
 | **Basic Usage** | 01 |
 | **Microservice Filtering** | 02, 10 |
-| **Deterministic Rollouts** | 03 |
-| **Real-time Updates** | 04 |
-| **Admin API** | 05 |
-| **HTTP Integration** | 06 |
+| **Deterministic Rollouts** | 03, 99 |
+| **Real-time Updates** | 04, 99 |
+| **Admin API** | 05, 99 |
+| **HTTP Integration** | 06, 99 |
 | **Disk Persistence** | 07 |
 | **Circuit Breaker** | 08 |
 | **Telemetry** | 09 |
 | **Memory Optimization** | 02, 10 |
+| **Full-Stack Demo** | 99 |
+| **Kill Switches** | 99 |
+| **Rate Limiting** | 99 |
 
 ## Use Case Guide
 
@@ -382,6 +449,10 @@ go run main.go
 **Learning Vexilla:**
 - Start with: [01-basic-usage](./01-basic-usage)
 - Then: [02-microservices](./02-microservices)
+- Complete demo: [99-complete-api](./99-complete-api) - Full-stack reference
+
+**Presentations & Demos:**
+- [99-complete-api](./99-complete-api) - Interactive full-stack demo with visual UI
 
 **High Performance:**
 - [03-deterministic-rollout](./03-deterministic-rollout) - Offline evaluation
@@ -392,6 +463,7 @@ go run main.go
 - [05-admin-server](./05-admin-server) - Management API
 - [08-circuit-breaker](./08-circuit-breaker) - Resilience
 - [09-telemetry](./09-telemetry) - Monitoring
+- [99-complete-api](./99-complete-api) - Complete reference architecture
 
 **Memory Optimization:**
 - [02-microservices](./02-microservices) - Basic filtering
@@ -399,10 +471,11 @@ go run main.go
 
 **HTTP APIs:**
 - [06-http-middleware](./06-http-middleware) - REST integration
+- [99-complete-api](./99-complete-api) - Full REST API + Frontend
 
 ## Running All Examples
 
-Run all examples in sequence:
+Run all CLI examples in sequence:
 
 ```bash
 #!/bin/bash
@@ -429,6 +502,8 @@ for example in "${examples[@]}"; do
     echo ""
 done
 ```
+
+**Note:** Example [99-complete-api](./99-complete-api) is a full-stack application that requires separate backend and frontend processes. See its [README](./99-complete-api/README.md) for instructions.
 
 ## Common Setup
 
