@@ -308,7 +308,12 @@ func (c *Cache) refreshLoop() {
 			return
 
 		case <-ticker.C:
-			ctx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
+			// Use CircuitBreakerTimeout for refresh operations
+			refreshTimeout := c.config.CircuitBreakerTimeout
+			if refreshTimeout <= 0 {
+				refreshTimeout = 30 * time.Second // Fallback for backward compatibility
+			}
+			ctx, cancel := context.WithTimeout(c.ctx, refreshTimeout)
 
 			if err := c.refreshFlags(ctx); err != nil {
 				c.handleRefreshError(err)
@@ -382,12 +387,23 @@ func (c *Cache) handleRefreshError(err error) {
 
 	c.consecutiveFails++
 
-	// Open circuit breaker after 3 consecutive failures
-	if c.consecutiveFails >= 3 {
+	// Use configured circuit breaker threshold
+	threshold := c.config.CircuitBreakerThreshold
+	if threshold <= 0 {
+		threshold = 3 // Fallback for backward compatibility
+	}
+
+	// Open circuit breaker after threshold consecutive failures
+	if c.consecutiveFails >= threshold {
 		c.circuitOpen = true
 
-		// Auto-reset after 30 seconds
-		time.AfterFunc(30*time.Second, func() {
+		// Use configured circuit breaker timeout for auto-reset
+		timeout := c.config.CircuitBreakerTimeout
+		if timeout <= 0 {
+			timeout = 30 * time.Second // Fallback for backward compatibility
+		}
+
+		time.AfterFunc(timeout, func() {
 			c.mu.Lock()
 			c.circuitOpen = false
 			c.mu.Unlock()

@@ -90,6 +90,10 @@ func (c Config) Validate() error {
 		return fmt.Errorf("circuit breaker threshold must be at least 1")
 	}
 
+	if c.CircuitBreakerTimeout <= 0 {
+		return fmt.Errorf("circuit breaker timeout must be positive")
+	}
+
 	// Validate filter config
 	if err := c.FilterConfig.Validate(); err != nil {
 		return fmt.Errorf("invalid filter config: %w", err)
