@@ -3,7 +3,7 @@ module github.com/OrlandoBitencourt/vexilla/examples/99-complete-api/backend
 go 1.25.4
 
 require (
-	github.com/OrlandoBitencourt/vexilla v1.1.1
+	github.com/OrlandoBitencourt/vexilla v1.2.0
 	github.com/gin-contrib/cors v1.7.3
 	github.com/gin-gonic/gin v1.10.0
 )
