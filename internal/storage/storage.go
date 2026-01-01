@@ -3,7 +3,9 @@ package storage
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/OrlandoBitencourt/vexilla/internal/domain"
 )
@@ -33,6 +35,7 @@ type Storage interface {
 }
 
 // Metrics represents storage metrics
+// All fields use atomic types for safe concurrent access
 type Metrics struct {
 	// Cache statistics
 	KeysAdded   uint64
@@ -55,6 +58,59 @@ type Metrics struct {
 
 	// Size
 	Size int64
+}
+
+// atomicMetrics holds the atomic versions of metrics for thread-safe updates
+type atomicMetrics struct {
+	// Cache statistics
+	keysAdded   atomic.Uint64
+	keysUpdated atomic.Uint64
+	keysEvicted atomic.Uint64
+	keysDeleted atomic.Uint64
+
+	// Memory statistics
+	costAdded   atomic.Uint64
+	costEvicted atomic.Uint64
+
+	// Operation statistics
+	setsDropped  atomic.Uint64
+	setsRejected atomic.Uint64
+	getsKept     atomic.Uint64
+	getsDropped  atomic.Uint64
+
+	// Performance metrics
+	hitRatio atomic.Uint64 // stored as bits of float64
+
+	// Size
+	size atomic.Int64
+}
+
+// snapshot returns a consistent snapshot of the metrics
+func (am *atomicMetrics) snapshot() Metrics {
+	return Metrics{
+		KeysAdded:    am.keysAdded.Load(),
+		KeysUpdated:  am.keysUpdated.Load(),
+		KeysEvicted:  am.keysEvicted.Load(),
+		KeysDeleted:  am.keysDeleted.Load(),
+		CostAdded:    am.costAdded.Load(),
+		CostEvicted:  am.costEvicted.Load(),
+		SetsDropped:  am.setsDropped.Load(),
+		SetsRejected: am.setsRejected.Load(),
+		GetsKept:     am.getsKept.Load(),
+		GetsDropped:  am.getsDropped.Load(),
+		HitRatio:     float64frombits(am.hitRatio.Load()),
+		Size:         am.size.Load(),
+	}
+}
+
+// float64frombits converts uint64 bits to float64
+func float64frombits(b uint64) float64 {
+	return *(*float64)(unsafe.Pointer(&b))
+}
+
+// float64bits converts float64 to uint64 bits
+func float64bits(f float64) uint64 {
+	return *(*uint64)(unsafe.Pointer(&f))
 }
 
 // Config holds storage configuration

@@ -6,9 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/OrlandoBitencourt/vexilla/internal/cache"
 	"github.com/OrlandoBitencourt/vexilla/internal/domain"
+	"github.com/OrlandoBitencourt/vexilla/internal/server"
 )
 
 // Client is the main entry point for Vexilla.
@@ -22,6 +24,13 @@ type Client struct {
 	webhookSecret  string
 	adminEnabled   bool
 	adminPort      int
+
+	// Server lifecycle management
+	webhookServer *server.WebhookServer
+	adminServer   *server.AdminServer
+	serverCtx     context.Context
+	serverCancel  context.CancelFunc
+	serverWg      sync.WaitGroup
 }
 
 // New creates a new Vexilla client with the given options.
@@ -104,7 +113,31 @@ func (c *Client) Sync(ctx context.Context) error {
 }
 
 // Stop gracefully shuts down the client and its background processes.
+// It stops all servers and waits for them to complete shutdown.
 func (c *Client) Stop() error {
+	// Cancel server context to signal shutdown
+	if c.serverCancel != nil {
+		c.serverCancel()
+	}
+
+	// Shutdown webhook server if running
+	if c.webhookServer != nil {
+		if err := c.webhookServer.Shutdown(context.Background()); err != nil {
+			return fmt.Errorf("failed to shutdown webhook server: %w", err)
+		}
+	}
+
+	// Shutdown admin server if running
+	if c.adminServer != nil {
+		if err := c.adminServer.Shutdown(context.Background()); err != nil {
+			return fmt.Errorf("failed to shutdown admin server: %w", err)
+		}
+	}
+
+	// Wait for all server goroutines to complete
+	c.serverWg.Wait()
+
+	// Stop cache
 	return c.cache.Stop()
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"runtime"
 	"testing"
 	"time"
 
@@ -390,4 +391,111 @@ func (w *testResponseWriter) Write(data []byte) (int, error) {
 
 func (w *testResponseWriter) WriteHeader(statusCode int) {
 	w.status = statusCode
+}
+
+// TestClient_ServerLifecycle_NoGoroutineLeak tests that servers are properly cleaned up
+func TestClient_ServerLifecycle_NoGoroutineLeak(t *testing.T) {
+	server := NewMockFlagrServer(t)
+	defer server.Close()
+
+	server.AddFlag(domain.Flag{
+		ID:      1,
+		Key:     "test-flag",
+		Enabled: true,
+		Segments: []domain.Segment{
+			{RolloutPercent: 100, Distributions: []domain.Distribution{{VariantID: 1, Percent: 100}}},
+		},
+		Variants: []domain.Variant{{ID: 1, Key: "on"}},
+	})
+
+	// Get baseline goroutine count
+	baselineGoroutines := runtime.NumGoroutine()
+
+	// Start and stop client multiple times
+	for i := 0; i < 5; i++ {
+		client, err := New(
+			WithFlagrEndpoint(server.URL),
+			WithWebhookInvalidation(WebhookConfig{
+				Port:   18600 + i,
+				Secret: "test-secret",
+			}),
+			WithAdminServer(AdminConfig{
+				Port: 19600 + i,
+			}),
+		)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+		err = client.Start(ctx)
+		require.NoError(t, err)
+
+		// Give servers time to start
+		time.Sleep(50 * time.Millisecond)
+
+		// Stop the client
+		err = client.Stop()
+		require.NoError(t, err)
+
+		// Give time for cleanup
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// Allow some goroutines for garbage collection, etc
+	// but we shouldn't have leaked server goroutines
+	finalGoroutines := runtime.NumGoroutine()
+	goroutineDiff := finalGoroutines - baselineGoroutines
+
+	// Allow a small buffer for background goroutines
+	assert.Less(t, goroutineDiff, 10, "Should not leak goroutines: baseline=%d, final=%d, diff=%d",
+		baselineGoroutines, finalGoroutines, goroutineDiff)
+}
+
+// TestClient_Stop_WaitsForServers tests that Stop() waits for server goroutines
+func TestClient_Stop_WaitsForServers(t *testing.T) {
+	server := NewMockFlagrServer(t)
+	defer server.Close()
+
+	server.AddFlag(domain.Flag{
+		ID:      1,
+		Key:     "test-flag",
+		Enabled: true,
+		Segments: []domain.Segment{
+			{RolloutPercent: 100, Distributions: []domain.Distribution{{VariantID: 1, Percent: 100}}},
+		},
+		Variants: []domain.Variant{{ID: 1, Key: "on"}},
+	})
+
+	client, err := New(
+		WithFlagrEndpoint(server.URL),
+		WithWebhookInvalidation(WebhookConfig{
+			Port:   18700,
+			Secret: "test-secret",
+		}),
+		WithAdminServer(AdminConfig{
+			Port: 19700,
+		}),
+	)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	err = client.Start(ctx)
+	require.NoError(t, err)
+
+	// Give servers time to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop should complete within reasonable time
+	stopDone := make(chan bool)
+	go func() {
+		err := client.Stop()
+		assert.NoError(t, err)
+		stopDone <- true
+	}()
+
+	select {
+	case <-stopDone:
+		// Success - Stop completed
+	case <-time.After(3 * time.Second):
+		t.Fatal("Stop() did not complete within 3 seconds")
+	}
 }

@@ -383,30 +383,52 @@ func (c *Client) HTTPMiddleware(next http.Handler) http.Handler {
 	return middleware.Handler(next)
 }
 
-// startWebhookServer inicia o servidor de webhook em background
+// startWebhookServer starts the webhook server in the background.
+// It tracks the server instance for proper shutdown.
 func (c *Client) startWebhookServer(ctx context.Context, port int, secret string) error {
 	adapter := &cacheAdapter{cache: c.cache}
-	webhookServer := server.NewWebhookServer(adapter, port, secret)
+	c.webhookServer = server.NewWebhookServer(adapter, port, secret)
 
+	// Create a new context for the server lifecycle
+	c.serverCtx, c.serverCancel = context.WithCancel(context.Background())
+
+	// Track the goroutine in WaitGroup
+	c.serverWg.Add(1)
+
+	// Start server in background goroutine
 	go func() {
-		if err := webhookServer.Start(); err != nil && err != http.ErrServerClosed {
-			// Log error but don't crash the application
-			fmt.Printf("webhook server error: %v\n", err)
+		defer c.serverWg.Done()
+		if err := c.webhookServer.Start(c.serverCtx); err != nil {
+			// Server stopped with error (ignore ErrServerClosed which is normal)
+			// Errors are logged within the server package
+			_ = err
 		}
 	}()
 
 	return nil
 }
 
-// startAdminServer inicia o servidor de administração em background
+// startAdminServer starts the admin server in the background.
+// It tracks the server instance for proper shutdown.
 func (c *Client) startAdminServer(ctx context.Context, port int) error {
 	adapter := &cacheAdapter{cache: c.cache}
-	adminServer := server.NewAdminServer(adapter, port)
+	c.adminServer = server.NewAdminServer(adapter, port)
 
+	// Create or reuse context for server lifecycle
+	if c.serverCancel == nil {
+		c.serverCtx, c.serverCancel = context.WithCancel(context.Background())
+	}
+
+	// Track the goroutine in WaitGroup
+	c.serverWg.Add(1)
+
+	// Start server in background goroutine
 	go func() {
-		if err := adminServer.Start(); err != nil && err != http.ErrServerClosed {
-			// Log error but don't crash the application
-			fmt.Printf("admin server error: %v\n", err)
+		defer c.serverWg.Done()
+		if err := c.adminServer.Start(c.serverCtx); err != nil {
+			// Server stopped with error (ignore ErrServerClosed which is normal)
+			// Errors are logged within the server package
+			_ = err
 		}
 	}()
 

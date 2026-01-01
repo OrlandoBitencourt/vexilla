@@ -12,7 +12,7 @@ import (
 type MemoryStorage struct {
 	cache   *ristretto.Cache
 	config  Config
-	metrics Metrics
+	metrics atomicMetrics
 }
 
 func NewMemoryStorage(cfg Config) (*MemoryStorage, error) {
@@ -40,12 +40,12 @@ func (m *MemoryStorage) Get(ctx context.Context, key string) (*domain.Flag, erro
 
 	val, ok := m.cache.Get(key)
 	if !ok {
-		m.metrics.GetsDropped++
+		m.metrics.getsDropped.Add(1)
 		return nil, ErrNotFound
 	}
 
 	flag := val.(domain.Flag)
-	m.metrics.GetsKept++
+	m.metrics.getsKept.Add(1)
 	return &flag, nil
 }
 
@@ -62,11 +62,11 @@ func (m *MemoryStorage) Set(ctx context.Context, key string, flag domain.Flag, t
 
 	ok := m.cache.SetWithTTL(key, flag, 1, ttl)
 	if !ok {
-		m.metrics.SetsRejected++
+		m.metrics.setsRejected.Add(1)
 		return errors.New("cache rejected set")
 	}
 
-	m.metrics.KeysAdded++
+	m.metrics.keysAdded.Add(1)
 
 	// CRITICAL: Wait for Ristretto to process the write
 	// Ristretto is async by design, this ensures the key is actually stored
@@ -77,7 +77,7 @@ func (m *MemoryStorage) Set(ctx context.Context, key string, flag domain.Flag, t
 
 func (m *MemoryStorage) Delete(ctx context.Context, key string) error {
 	m.cache.Del(key)
-	m.metrics.KeysDeleted++
+	m.metrics.keysDeleted.Add(1)
 	return nil
 }
 
@@ -91,6 +91,6 @@ func (m *MemoryStorage) List(ctx context.Context) ([]string, error) {
 	return nil, errors.New("memory storage cannot list keys (not supported by ristretto)")
 }
 
-func (m *MemoryStorage) Metrics() Metrics { return m.metrics }
+func (m *MemoryStorage) Metrics() Metrics { return m.metrics.snapshot() }
 
 func (m *MemoryStorage) Close() error { m.cache.Close(); return nil }

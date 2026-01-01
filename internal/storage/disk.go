@@ -19,7 +19,7 @@ const snapshotFile = "snapshot.json"
 
 type DiskStorage struct {
 	dir     string
-	metrics Metrics
+	metrics atomicMetrics
 	mu      sync.RWMutex
 }
 
@@ -58,7 +58,7 @@ func (d *DiskStorage) Get(ctx context.Context, key string) (*domain.Flag, error)
 		return nil, err
 	}
 
-	d.metrics.GetsKept++
+	d.metrics.getsKept.Add(1)
 	return &flag, nil
 }
 
@@ -78,16 +78,21 @@ func (d *DiskStorage) Set(ctx context.Context, key string, flag domain.Flag, ttl
 	}
 
 	file := d.filePath(key)
+
+	// Check if file exists before writing
+	_, statErr := os.Stat(file)
+	isNew := os.IsNotExist(statErr)
+
 	writeErr := os.WriteFile(file, data, 0644)
 	if writeErr != nil {
-		d.metrics.SetsDropped++
+		d.metrics.setsDropped.Add(1)
 		return writeErr
 	}
 
-	if _, err := os.Stat(file); os.IsNotExist(err) {
-		d.metrics.KeysAdded++
+	if isNew {
+		d.metrics.keysAdded.Add(1)
 	} else {
-		d.metrics.KeysUpdated++
+		d.metrics.keysUpdated.Add(1)
 	}
 
 	return nil
@@ -102,7 +107,7 @@ func (d *DiskStorage) Delete(ctx context.Context, key string) error {
 		return err
 	}
 
-	d.metrics.KeysDeleted++
+	d.metrics.keysDeleted.Add(1)
 	return nil
 }
 
@@ -192,6 +197,6 @@ func (d *DiskStorage) LoadSnapshot(ctx context.Context) (map[string]domain.Flag,
 	return snapshot, nil
 }
 
-func (d *DiskStorage) Metrics() Metrics { return d.metrics }
+func (d *DiskStorage) Metrics() Metrics { return d.metrics.snapshot() }
 
 func (d *DiskStorage) Close() error { return nil }
