@@ -15,12 +15,20 @@ import (
 	"github.com/OrlandoBitencourt/vexilla"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Server holds the application state
 type Server struct {
 	vexilla     *vexilla.Client
 	rateLimiter *RateLimiter
+	tracer      trace.Tracer
 }
 
 // RateLimiter simple in-memory rate limiter
@@ -104,13 +112,69 @@ func DeterministicBucketFromCPF(cpf string) (int, error) {
 	return bucket, nil
 }
 
+// initJaeger initializes OpenTelemetry with Jaeger exporter
+func initJaeger(ctx context.Context) (func(context.Context) error, error) {
+	// Create OTLP HTTP exporter
+	exporter, err := otlptracehttp.New(ctx,
+		otlptracehttp.WithEndpoint("localhost:4318"),
+		otlptracehttp.WithInsecure(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create exporter: %w", err)
+	}
+
+	// Create resource with service name
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String("vexilla-demo-api"),
+			semconv.ServiceVersionKey.String("1.0.0"),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource: %w", err)
+	}
+
+	// Create tracer provider
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(res),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+	)
+
+	// Set global tracer provider
+	otel.SetTracerProvider(tp)
+
+	// Set global propagator for context propagation
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	return tp.Shutdown, nil
+}
+
 func main() {
 	fmt.Println("🏴 Vexilla Demo API")
 	fmt.Println("===================")
 	fmt.Println()
 
-	// Create Vexilla client
-	fmt.Println("📦 Creating Vexilla client...")
+	ctx := context.Background()
+
+	// Initialize Jaeger tracing
+	fmt.Println("🔍 Initializing Jaeger tracing...")
+	shutdown, err := initJaeger(ctx)
+	if err != nil {
+		log.Fatalf("❌ Failed to initialize Jaeger: %v", err)
+	}
+	defer func() {
+		if err := shutdown(ctx); err != nil {
+			log.Printf("⚠️  Failed to shutdown tracer: %v", err)
+		}
+	}()
+	fmt.Println("✅ Jaeger tracing initialized (http://localhost:16686)")
+
+	// Create Vexilla client (will automatically use the global OpenTelemetry tracer)
+	fmt.Println("📦 Creating Vexilla client with OpenTelemetry...")
 	client, err := vexilla.New(
 		vexilla.WithFlagrEndpoint("http://localhost:18000"),
 		vexilla.WithRefreshInterval(30*time.Second),
@@ -122,16 +186,17 @@ func main() {
 
 	// Start client
 	fmt.Println("🚀 Starting Vexilla client...")
-	ctx := context.Background()
 	if err := client.Start(ctx); err != nil {
 		log.Fatalf("❌ Failed to start Vexilla client: %v", err)
 	}
 	defer client.Stop()
 
 	// Initialize server
+	tracer := otel.Tracer("vexilla-demo-api")
 	server := &Server{
 		vexilla:     client,
 		rateLimiter: NewRateLimiter(10, time.Minute), // 10 requests per minute
+		tracer:      tracer,
 	}
 
 	// Setup Gin
@@ -159,6 +224,9 @@ func main() {
 		log.Printf("[%d] %s %s - %v\n", statusCode, c.Request.Method, path, latency)
 	})
 
+	// OpenTelemetry tracing middleware
+	r.Use(server.TracingMiddleware())
+
 	// Apply rate limit middleware globally
 	r.Use(server.RateLimitMiddleware())
 
@@ -177,7 +245,7 @@ func main() {
 
 	// Start server
 	fmt.Println("✅ Server ready!")
-	fmt.Println("🌐 Listening on http://localhost:8080")
+	fmt.Println("🌐 Listening on http://localhost:9080")
 	fmt.Println()
 	fmt.Println("📋 Available routes:")
 	fmt.Println("   GET  /health")
@@ -188,12 +256,49 @@ func main() {
 	fmt.Println("   GET  /admin/flags/metrics")
 	fmt.Println()
 
-	if err := r.Run(":8080"); err != nil {
+	if err := r.Run(":9080"); err != nil {
 		log.Fatalf("❌ Failed to start server: %v", err)
 	}
 }
 
 // Middleware
+func (s *Server) TracingMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		spanName := fmt.Sprintf("%s %s", c.Request.Method, c.FullPath())
+		if c.FullPath() == "" {
+			spanName = fmt.Sprintf("%s %s", c.Request.Method, c.Request.URL.Path)
+		}
+
+		ctx, span := s.tracer.Start(ctx, spanName)
+		defer span.End()
+
+		// Add request attributes to span
+		span.SetAttributes(
+			semconv.HTTPMethodKey.String(c.Request.Method),
+			semconv.HTTPURLKey.String(c.Request.URL.String()),
+			semconv.HTTPTargetKey.String(c.Request.URL.Path),
+			semconv.HTTPUserAgentKey.String(c.Request.UserAgent()),
+		)
+
+		// Add custom attributes from headers
+		if userID := c.GetHeader("X-User-ID"); userID != "" {
+			span.SetAttributes(semconv.EnduserIDKey.String(userID))
+		}
+		if role := c.GetHeader("X-User-Role"); role != "" {
+			span.SetAttributes(semconv.EnduserRoleKey.String(role))
+		}
+
+		// Update context in request
+		c.Request = c.Request.WithContext(ctx)
+
+		c.Next()
+
+		// Add response status to span
+		span.SetAttributes(semconv.HTTPStatusCodeKey.Int(c.Writer.Status()))
+	}
+}
+
 func (s *Server) RateLimitMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		evalCtx := BuildEvalContext(c)
